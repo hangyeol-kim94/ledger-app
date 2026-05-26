@@ -2,7 +2,6 @@ import React, { useEffect } from 'react'
 import { useAppStore } from './stores/useAppStore'
 import { initializeDB } from './db'
 
-// Lazy imports (will be created by UI agent)
 const HomePage = React.lazy(() => import('./pages/Home'))
 const TransactionsPage = React.lazy(() => import('./pages/Transactions'))
 const AccountsPage = React.lazy(() => import('./pages/Accounts'))
