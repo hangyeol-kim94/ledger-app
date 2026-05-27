@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAppStore } from './stores/useAppStore'
 import { initializeDB } from './db'
+import PinLock from './components/PinLock'
+import { isPinUnlocked } from './lib/pin'
 
 const HomePage = React.lazy(() => import('./pages/Home'))
 const TransactionsPage = React.lazy(() => import('./pages/Transactions'))
@@ -10,10 +12,13 @@ const AddTransactionModal = React.lazy(() => import('./components/AddTransaction
 
 function App() {
   const { currentPage, setCurrentPage, isAddTransactionOpen, openAddTransaction, toast } = useAppStore()
+  const [unlocked, setUnlocked] = useState(isPinUnlocked)
 
   useEffect(() => {
-    initializeDB().catch(console.error)
-  }, [])
+    if (unlocked) initializeDB().catch(console.error)
+  }, [unlocked])
+
+  if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} />
 
   return (
     <React.Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',fontSize:'20px'}}>⏳</div>}>
