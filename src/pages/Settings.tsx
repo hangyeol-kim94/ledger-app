@@ -9,6 +9,7 @@ import {
 import { importWithMigration } from '../db/migrations'
 import { ulid } from '../utils/ulid'
 import { useAppStore } from '../stores/useAppStore'
+import { CategoryIcon } from '../utils/categoryIcons'
 
 const COLOR_PRESETS = ['#2563EB', '#7C3AED', '#D97706', '#059669', '#DC2626', '#0891B2']
 const APP_VERSION = '1.0.0'
@@ -24,6 +25,7 @@ export default function SettingsPage() {
 
   const [newCatName, setNewCatName] = useState('')
   const [newCatColor, setNewCatColor] = useState(COLOR_PRESETS[0])
+  const [newCatParentId, setNewCatParentId] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [editingColor, setEditingColor] = useState('')
@@ -31,6 +33,19 @@ export default function SettingsPage() {
 
   const activeCats = useMemo(() => categories.filter((c) => !c.archived), [categories])
   const archivedCats = useMemo(() => categories.filter((c) => c.archived), [categories])
+
+  const parentCats = useMemo(() => activeCats.filter((c) => c.parent_id === null), [activeCats])
+  const childCatsMap = useMemo(() => {
+    const map = new Map<string, Category[]>()
+    for (const cat of activeCats) {
+      if (cat.parent_id) {
+        const arr = map.get(cat.parent_id) ?? []
+        arr.push(cat)
+        map.set(cat.parent_id, arr)
+      }
+    }
+    return map
+  }, [activeCats])
 
   async function exportJSON() {
     try {
@@ -127,10 +142,15 @@ export default function SettingsPage() {
   async function addCategory() {
     const name = newCatName.trim()
     if (!name) { showToast('카테고리 이름을 입력해주세요', 'error'); return }
-    await createCategory({ id: ulid(), name, color: newCatColor, archived: false, created_at_utc: new Date().toISOString() })
+    await createCategory({
+      id: ulid(), name, color: newCatColor,
+      parent_id: newCatParentId || null,
+      archived: false, created_at_utc: new Date().toISOString(),
+    })
     queryClient.invalidateQueries({ queryKey: ['categories'] })
     setNewCatName('')
     setNewCatColor(COLOR_PRESETS[0])
+    setNewCatParentId('')
     showToast('카테고리가 추가되었습니다')
   }
 
@@ -190,6 +210,14 @@ export default function SettingsPage() {
             <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="새 카테고리 이름" style={{ flex: 1, padding: '8px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)' }} />
             <button onClick={addCategory} style={{ padding: '8px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>추가</button>
           </div>
+          <select
+            value={newCatParentId}
+            onChange={(e) => setNewCatParentId(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)', marginBottom: 10 }}
+          >
+            <option value="">최상위 카테고리 (없음)</option>
+            {parentCats.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {COLOR_PRESETS.map((c) => (
               <button key={c} type="button" onClick={() => setNewCatColor(c)} style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: newCatColor === c ? '3px solid var(--text)' : '3px solid transparent', cursor: 'pointer' }} aria-label={c} />
@@ -200,17 +228,60 @@ export default function SettingsPage() {
         {activeCats.length === 0 ? (
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>카테고리가 없습니다</div>
         ) : (
-          activeCats.map((cat, idx) => (
-            <CategoryRow
-              key={cat.id} cat={cat}
-              isLast={idx === activeCats.length - 1 && archivedCats.length === 0}
-              isEditing={editingId === cat.id}
-              editingName={editingName} editingColor={editingColor}
-              setEditingName={setEditingName} setEditingColor={setEditingColor}
-              onStartEdit={() => startEditCat(cat)} onCancelEdit={cancelEditCat} onSaveEdit={saveEditCat}
-              onDelete={() => deleteOrArchiveCat(cat)}
-            />
-          ))
+          parentCats.map((parent, parentIdx) => {
+            const children = childCatsMap.get(parent.id) ?? []
+            const isLastParent = parentIdx === parentCats.length - 1 && archivedCats.length === 0
+            if (children.length === 0) {
+              return (
+                <CategoryRow
+                  key={parent.id} cat={parent}
+                  isLast={isLastParent}
+                  isEditing={editingId === parent.id}
+                  editingName={editingName} editingColor={editingColor}
+                  setEditingName={setEditingName} setEditingColor={setEditingColor}
+                  onStartEdit={() => startEditCat(parent)} onCancelEdit={cancelEditCat} onSaveEdit={saveEditCat}
+                  onDelete={() => deleteOrArchiveCat(parent)}
+                />
+              )
+            }
+            return (
+              <div key={parent.id}>
+                <div style={{ padding: '10px 20px 4px', display: 'flex', alignItems: 'center', gap: 8, borderTop: parentIdx === 0 ? 'none' : '1px solid var(--border)', background: 'var(--bg)' }}>
+                  <CategoryIcon name={parent.name} size={14} color={parent.color} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{parent.name}</span>
+                  <div style={{ flex: 1 }} />
+                  <button onClick={() => startEditCat(parent)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: 'var(--text)', cursor: 'pointer' }}>편집</button>
+                  <button onClick={() => deleteOrArchiveCat(parent)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: 'var(--expense)', cursor: 'pointer' }}>삭제</button>
+                </div>
+                {editingId === parent.id && (
+                  <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <input type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} style={{ flex: 1, padding: '6px 10px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)' }} />
+                      <button onClick={saveEditCat} style={{ padding: '6px 10px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>저장</button>
+                      <button onClick={cancelEditCat} style={{ padding: '6px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>취소</button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {COLOR_PRESETS.map((c) => (
+                        <button key={c} type="button" onClick={() => setEditingColor(c)} style={{ width: 22, height: 22, borderRadius: '50%', background: c, border: editingColor === c ? '2px solid var(--text)' : '2px solid transparent', cursor: 'pointer' }} aria-label={c} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {children.map((child, childIdx) => (
+                  <CategoryRow
+                    key={child.id} cat={child}
+                    isLast={isLastParent && childIdx === children.length - 1}
+                    isEditing={editingId === child.id}
+                    editingName={editingName} editingColor={editingColor}
+                    setEditingName={setEditingName} setEditingColor={setEditingColor}
+                    onStartEdit={() => startEditCat(child)} onCancelEdit={cancelEditCat} onSaveEdit={saveEditCat}
+                    onDelete={() => deleteOrArchiveCat(child)}
+                    indent
+                  />
+                ))}
+              </div>
+            )
+          })
         )}
 
         {archivedCats.length > 0 && (
@@ -222,7 +293,7 @@ export default function SettingsPage() {
             {showArchivedCats && archivedCats.map((cat) => (
               <div key={cat.id} style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', opacity: 0.7 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: cat.color }} />
+                  <CategoryIcon name={cat.name} size={14} color={cat.color} />
                   <span style={{ fontSize: 14, color: 'var(--text)' }}>{cat.name}</span>
                 </div>
                 <button onClick={() => unarchiveCat(cat)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>복원</button>
@@ -273,18 +344,20 @@ interface CategoryRowProps {
   editingName: string; editingColor: string
   setEditingName: (v: string) => void; setEditingColor: (v: string) => void
   onStartEdit: () => void; onCancelEdit: () => void; onSaveEdit: () => void; onDelete: () => void
+  indent?: boolean
 }
 
-function CategoryRow({ cat, isLast, isEditing, editingName, editingColor, setEditingName, setEditingColor, onStartEdit, onCancelEdit, onSaveEdit, onDelete }: CategoryRowProps) {
+function CategoryRow({ cat, isLast, isEditing, editingName, editingColor, setEditingName, setEditingColor, onStartEdit, onCancelEdit, onSaveEdit, onDelete, indent = false }: CategoryRowProps) {
+  const paddingLeft = indent ? 36 : 20
   if (isEditing) {
     return (
-      <div style={{ padding: '12px 20px', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+      <div style={{ padding: `12px ${paddingLeft}px 12px 20px`, borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, paddingLeft: indent ? 16 : 0 }}>
           <input type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} style={{ flex: 1, padding: '8px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)' }} />
           <button onClick={onSaveEdit} style={{ padding: '8px 12px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>저장</button>
           <button onClick={onCancelEdit} style={{ padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>취소</button>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingLeft: indent ? 16 : 0 }}>
           {COLOR_PRESETS.map((c) => (
             <button key={c} type="button" onClick={() => setEditingColor(c)} style={{ width: 24, height: 24, borderRadius: '50%', background: c, border: editingColor === c ? '2px solid var(--text)' : '2px solid transparent', cursor: 'pointer' }} aria-label={c} />
           ))}
@@ -294,10 +367,11 @@ function CategoryRow({ cat, isLast, isEditing, editingName, editingColor, setEdi
     )
   }
   return (
-    <div style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
+    <div style={{ padding: `12px 20px 12px ${paddingLeft}px`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 14, height: 14, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 14, color: 'var(--text)' }}>{cat.name}</span>
+        {indent && <span style={{ color: 'var(--muted)', fontSize: 12, marginRight: 2 }}>└</span>}
+        <CategoryIcon name={cat.name} size={indent ? 14 : 16} color={cat.color} />
+        <span style={{ fontSize: indent ? 13 : 14, color: 'var(--text)' }}>{cat.name}</span>
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <button onClick={onStartEdit} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>편집</button>

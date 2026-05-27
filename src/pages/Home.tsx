@@ -5,6 +5,7 @@ import type { Account, Category, Transaction } from '../types'
 import { formatKRW, formatMonthKorean, navigateMonth, today } from '../utils/format'
 import { useAppStore } from '../stores/useAppStore'
 import DonutChart, { type DonutSlice } from '../components/DonutChart'
+import { CategoryIcon, TrendingUp, TrendingDown, ArrowLeftRight } from '../utils/categoryIcons'
 
 const GRADIENTS = [
   'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
@@ -13,17 +14,6 @@ const GRADIENTS = [
   'linear-gradient(135deg, #059669 0%, #047857 100%)',
   'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
 ]
-
-const CATEGORY_EMOJI: Record<string, string> = {
-  식비: '🍚',
-  교통: '🚌',
-  주거: '🏠',
-  통신: '📱',
-  여가: '🎮',
-  의료: '💊',
-  교육: '📚',
-  기타: '📦',
-}
 
 function formatTxnDate(dateStr: string): string {
   const t = today()
@@ -271,7 +261,6 @@ export default function HomePage() {
               const iconBg = t.type === 'income' ? '#ECFDF5' : t.type === 'expense' ? '#FEF2F2' : '#EEF2FF'
               const amountColor = t.type === 'income' ? '#10B981' : t.type === 'expense' ? '#EF4444' : '#6366F1'
               const sign = t.type === 'income' ? '+' : t.type === 'expense' ? '−' : ''
-              const emoji = cat?.name && CATEGORY_EMOJI[cat.name] ? CATEGORY_EMOJI[cat.name] : t.type === 'income' ? '💰' : t.type === 'expense' ? '💸' : '🔄'
               const name = t.memo || cat?.name || (t.type === 'income' ? '수입' : t.type === 'expense' ? '지출' : '이체')
               const metaParts: string[] = []
               if (cat?.name) metaParts.push(cat.name)
@@ -279,8 +268,16 @@ export default function HomePage() {
 
               return (
                 <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
-                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                    {emoji}
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {cat ? (
+                      <CategoryIcon name={cat.name} size={18} color={amountColor} />
+                    ) : t.type === 'income' ? (
+                      <TrendingUp size={18} color="#10B981" strokeWidth={1.8} />
+                    ) : t.type === 'expense' ? (
+                      <TrendingDown size={18} color="#EF4444" strokeWidth={1.8} />
+                    ) : (
+                      <ArrowLeftRight size={18} color="#6366F1" strokeWidth={1.8} />
+                    )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>

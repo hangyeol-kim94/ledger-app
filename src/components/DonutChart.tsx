@@ -21,11 +21,10 @@ const CIRCUMFERENCE = 2 * Math.PI * 50 // ≈ 314.159...
 export default function DonutChart({ slices, centerLabel, centerAmount }: DonutChartProps) {
   // Build cumulative offsets so segments stack one after another.
   // For each slice: stroke-dasharray = "arc gap"; stroke-dashoffset = C - (offset_so_far)
-  let cumulative = 0
-  const segments = slices.map((s) => {
+  const segments = slices.map((s, i) => {
+    const cumulative = slices.slice(0, i).reduce((sum, p) => sum + p.percentage, 0)
     const arc = (s.percentage / 100) * CIRCUMFERENCE
     const dashOffset = CIRCUMFERENCE - (cumulative / 100) * CIRCUMFERENCE
-    cumulative += s.percentage
     return { ...s, arc, dashOffset }
   })
 

@@ -1,7 +1,7 @@
 import { supabase } from '../../lib/supabase'
 import type { Account, Transaction, Category } from '../../types'
 
-export async function runMigrations(_currentVersion: number): Promise<void> {
+export async function runMigrations(): Promise<void> {
   // 현재 v1 스키마만 지원 — 향후 마이그레이션 여기에 추가
 }
 

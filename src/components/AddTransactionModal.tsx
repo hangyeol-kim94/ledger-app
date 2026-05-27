@@ -1,23 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { TransactionType, Amount } from '../types'
+import type { TransactionType, Amount, Category } from '../types'
 import { getAccounts, getCategories, createTransaction } from '../db'
 import { ulid } from '../utils/ulid'
 import { today } from '../utils/format'
 import { useAppStore } from '../stores/useAppStore'
+import { CategoryIcon } from '../utils/categoryIcons'
 
 const TAB_COLORS: Record<TransactionType, string> = { expense: '#EF4444', income: '#10B981', transfer: '#6366F1' }
 const TAB_LABELS: Record<TransactionType, string> = { expense: '지출', income: '수입', transfer: '이체' }
-
-const CATEGORIES_WITH_EMOJI: Array<{ name: string; emoji: string }> = [
-  { name: '식비', emoji: '🍚' }, { name: '교통', emoji: '🚌' }, { name: '주거', emoji: '🏠' },
-  { name: '통신', emoji: '📱' }, { name: '여가', emoji: '🎮' }, { name: '의료', emoji: '💊' },
-  { name: '급여', emoji: '💰' }, { name: '기타', emoji: '📦' },
-]
-
-function getEmoji(name: string): string {
-  return CATEGORIES_WITH_EMOJI.find((c) => c.name === name)?.emoji ?? '📦'
-}
 
 export default function AddTransactionModal() {
   const closeAddTransaction = useAppStore((s) => s.closeAddTransaction)
@@ -32,17 +23,17 @@ export default function AddTransactionModal() {
   const [type, setType] = useState<TransactionType>('expense')
   const [amountRaw, setAmountRaw] = useState<string>('')
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null)
   const [fromAccountId, setFromAccountId] = useState<string>('')
   const [toAccountId, setToAccountId] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>(today())
   const [memo, setMemo] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (!fromAccountId && activeAccounts.length > 0) setFromAccountId(activeAccounts[0].id)
-    if (!toAccountId && activeAccounts.length > 1) setToAccountId(activeAccounts[1].id)
-    else if (!toAccountId && activeAccounts.length > 0) setToAccountId(activeAccounts[0].id)
-  }, [activeAccounts, fromAccountId, toAccountId])
+  const defaultFromId = activeAccounts[0]?.id ?? ''
+  const defaultToId = activeAccounts.length > 1 ? activeAccounts[1].id : (activeAccounts[0]?.id ?? '')
+  const effectiveFromAccountId = fromAccountId || defaultFromId
+  const effectiveToAccountId = toAccountId || defaultToId
 
   const handleAmountChange = (v: string) => {
     const cleaned = v.replace(/[^0-9]/g, '')
@@ -51,6 +42,22 @@ export default function AddTransactionModal() {
 
   const amountInt = amountRaw === '' ? 0 : parseInt(amountRaw, 10)
   const amountDisplay = amountRaw === '' ? '' : Number(amountRaw).toLocaleString('ko-KR')
+
+  const parentCats = (categories ?? []).filter((c) => c.parent_id === null && !c.archived)
+  const childCats = selectedParentId
+    ? (categories ?? []).filter((c) => c.parent_id === selectedParentId && !c.archived)
+    : []
+
+  function handleParentClick(cat: Category) {
+    const hasChildren = (categories ?? []).some((c) => c.parent_id === cat.id && !c.archived)
+    if (hasChildren) {
+      setSelectedParentId(selectedParentId === cat.id ? null : cat.id)
+      setSelectedCategoryId(null)
+    } else {
+      setSelectedCategoryId(cat.id)
+      setSelectedParentId(null)
+    }
+  }
 
   const handleClose = useCallback(() => closeAddTransaction(), [closeAddTransaction])
 
@@ -63,10 +70,10 @@ export default function AddTransactionModal() {
   async function handleSave() {
     if (saving) return
     if (amountInt <= 0) { showToast('금액을 입력하세요', 'error'); return }
-    if (!fromAccountId) { showToast('계좌를 선택하세요', 'error'); return }
+    if (!effectiveFromAccountId) { showToast('계좌를 선택하세요', 'error'); return }
     if (type === 'transfer') {
-      if (!toAccountId) { showToast('받는 계좌를 선택하세요', 'error'); return }
-      if (fromAccountId === toAccountId) { showToast('보내는/받는 계좌가 같을 수 없습니다', 'error'); return }
+      if (!effectiveToAccountId) { showToast('받는 계좌를 선택하세요', 'error'); return }
+      if (effectiveFromAccountId === effectiveToAccountId) { showToast('보내는/받는 계좌가 같을 수 없습니다', 'error'); return }
     } else {
       if (!selectedCategoryId) { showToast('카테고리를 선택하세요', 'error'); return }
     }
@@ -78,8 +85,8 @@ export default function AddTransactionModal() {
         id: ulid(),
         type,
         amount: amountInt as Amount,
-        account_id: fromAccountId,
-        to_account_id: type === 'transfer' ? toAccountId : null,
+        account_id: effectiveFromAccountId,
+        to_account_id: type === 'transfer' ? effectiveToAccountId : null,
         date: selectedDate,
         category_id: type !== 'transfer' ? selectedCategoryId : null,
         memo,
@@ -98,8 +105,6 @@ export default function AddTransactionModal() {
       setSaving(false)
     }
   }
-
-  const categoryItems = (categories ?? []).map((c) => ({ id: c.id, name: c.name, emoji: getEmoji(c.name) }))
 
   const overlayStyle: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', animation: 'fadeIn 0.18s ease' }
   const panelStyle: React.CSSProperties = { width: '100%', maxWidth: 430, background: '#FFFFFF', borderRadius: '24px 24px 0 0', padding: '12px 20px 32px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 -8px 32px rgba(0,0,0,0.12)' }
@@ -122,7 +127,7 @@ export default function AddTransactionModal() {
 
         <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: 12, padding: 4, marginBottom: 20, gap: 4 }}>
           {(['expense', 'income', 'transfer'] as TransactionType[]).map((t) => (
-            <button key={t} style={tabStyle(t)} onClick={() => { setType(t); if (t === 'transfer') setSelectedCategoryId(null) }}>{TAB_LABELS[t]}</button>
+            <button key={t} style={tabStyle(t)} onClick={() => { setType(t); setSelectedCategoryId(null); setSelectedParentId(null) }}>{TAB_LABELS[t]}</button>
           ))}
         </div>
 
@@ -136,22 +141,54 @@ export default function AddTransactionModal() {
         {type !== 'transfer' && (
           <>
             <div style={fieldLabelStyle}>카테고리</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {categoryItems.map((cat) => {
-                const active = selectedCategoryId === cat.id
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+              {parentCats.map((cat) => {
+                const isActive = selectedParentId === cat.id ||
+                  (!(categories ?? []).some((c) => c.parent_id === cat.id && !c.archived) && selectedCategoryId === cat.id)
                 return (
-                  <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 4px', borderRadius: 12, border: active ? '1.5px solid #2563EB' : '1px solid #E2E8F0', background: active ? '#EFF6FF' : '#FFFFFF', color: '#1E293B' }}>
-                    <span style={{ fontSize: 22 }}>{cat.emoji}</span>
-                    <span style={{ fontSize: 11, fontWeight: 500 }}>{cat.name}</span>
+                  <button key={cat.id} onClick={() => handleParentClick(cat)} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    padding: '10px 4px', borderRadius: 10,
+                    border: isActive ? `2px solid ${cat.color}` : '1px solid #E2E8F0',
+                    background: isActive ? `${cat.color}18` : '#FFFFFF',
+                    color: '#1E293B', cursor: 'pointer',
+                  }}>
+                    <CategoryIcon name={cat.name} size={20} color={isActive ? cat.color : '#64748B'} />
+                    <span style={{ fontSize: 10, fontWeight: 500, textAlign: 'center', lineHeight: 1.2 }}>{cat.name}</span>
                   </button>
                 )
               })}
             </div>
+
+            {selectedParentId && childCats.length > 0 && (
+              <div style={{ marginTop: 10, padding: '10px 12px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 8, fontWeight: 600 }}>
+                  {parentCats.find((c) => c.id === selectedParentId)?.name} 세부항목
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                  {childCats.map((cat) => {
+                    const active = selectedCategoryId === cat.id
+                    return (
+                      <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                        padding: '8px 4px', borderRadius: 8,
+                        border: active ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                        background: active ? '#EFF6FF' : '#FFFFFF',
+                        color: '#1E293B', cursor: 'pointer',
+                      }}>
+                        <CategoryIcon name={cat.name} size={18} color={active ? '#2563EB' : '#64748B'} />
+                        <span style={{ fontSize: 10, fontWeight: 500, textAlign: 'center', lineHeight: 1.2 }}>{cat.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
 
         <div style={fieldLabelStyle}>{type === 'transfer' ? '보내는 계좌' : '계좌'}</div>
-        <select value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)} style={selectStyle}>
+        <select value={effectiveFromAccountId} onChange={(e) => setFromAccountId(e.target.value)} style={selectStyle}>
           <option value="">계좌 선택</option>
           {activeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
@@ -159,7 +196,7 @@ export default function AddTransactionModal() {
         {type === 'transfer' && (
           <>
             <div style={fieldLabelStyle}>받는 계좌</div>
-            <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} style={selectStyle}>
+            <select value={effectiveToAccountId} onChange={(e) => setToAccountId(e.target.value)} style={selectStyle}>
               <option value="">계좌 선택</option>
               {activeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>

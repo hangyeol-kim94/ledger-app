@@ -16,7 +16,7 @@ export function utcToLocalMonth(utcStr: string, tz = 'Asia/Seoul'): string {
 }
 
 // Parse 'YYYY-MM-DD' + time '00:00:00' in given TZ to UTC ISO string
-export function localDateToUtc(dateStr: string, _tz = 'Asia/Seoul'): string {
+export function localDateToUtc(dateStr: string): string {
   // Use Intl to compute offset
   const d = new Date(`${dateStr}T00:00:00`)
   return d.toISOString()
