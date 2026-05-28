@@ -4,3 +4,5 @@
 - [supabase-migration-pattern](supabase-migration-pattern.md) — Supabase 스키마 변경 4단계 패턴 (ALTER→INSERT→UPDATE→archive)
 - [lucide-icon-pattern](lucide-icon-pattern.md) — lucide-react ICON_MAP으로 카테고리명→아이콘 매핑
 - [eslint-react-hooks-fixes](eslint-react-hooks-fixes.md) — react-hooks/immutability 및 set-state-in-effect 오류 수정 패턴
+- [recharts-tooltip-type-fix](recharts-tooltip-type-fix.md) — Recharts Tooltip formatter 파라미터 타입 오류 수정 패턴
+- [analytics-page-architecture](analytics-page-architecture.md) — Analytics 분석 페이지 구조 및 데이터 흐름 패턴
