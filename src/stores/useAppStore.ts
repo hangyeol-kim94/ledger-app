@@ -3,7 +3,7 @@ import { currentMonth } from '../utils/format'
 
 interface AppState {
   // Navigation
-  currentPage: 'home' | 'transactions' | 'accounts' | 'settings'
+  currentPage: 'home' | 'transactions' | 'accounts' | 'settings' | 'analytics'
   setCurrentPage: (page: AppState['currentPage']) => void
 
   // Selected month for dashboard

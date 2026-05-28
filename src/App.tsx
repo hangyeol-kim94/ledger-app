@@ -8,6 +8,7 @@ const HomePage = React.lazy(() => import('./pages/Home'))
 const TransactionsPage = React.lazy(() => import('./pages/Transactions'))
 const AccountsPage = React.lazy(() => import('./pages/Accounts'))
 const SettingsPage = React.lazy(() => import('./pages/Settings'))
+const AnalyticsPage = React.lazy(() => import('./pages/Analytics'))
 const AddTransactionModal = React.lazy(() => import('./components/AddTransactionModal'))
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
         {currentPage === 'home' && <HomePage />}
         {currentPage === 'transactions' && <TransactionsPage />}
         {currentPage === 'accounts' && <AccountsPage />}
+        {currentPage === 'analytics' && <AnalyticsPage />}
         {currentPage === 'settings' && <SettingsPage />}
 
         {isAddTransactionOpen && <AddTransactionModal />}
@@ -46,9 +48,9 @@ function App() {
           <button className="nav-add" onClick={openAddTransaction} aria-label="거래 추가">
             <span>+</span>
           </button>
-          <button className={`nav-btn ${currentPage === 'accounts' ? 'active' : ''}`} onClick={() => setCurrentPage('accounts')}>
-            <span>🏦</span>
-            <span>계좌</span>
+          <button className={`nav-btn ${currentPage === 'analytics' ? 'active' : ''}`} onClick={() => setCurrentPage('analytics')}>
+            <span>📊</span>
+            <span>분석</span>
           </button>
           <button className={`nav-btn ${currentPage === 'settings' ? 'active' : ''}`} onClick={() => setCurrentPage('settings')}>
             <span>⚙️</span>
