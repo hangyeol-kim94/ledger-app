@@ -1,14 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { TransactionType, Transaction } from '../types'
+import type { TransactionType, Transaction, Category } from '../types'
 import { getAccounts, getCategories, getTransactionsByMonth, updateTransaction } from '../db'
 import { formatKRW, formatKRWSigned, formatDateKorean, formatMonthKorean, navigateMonth } from '../utils/format'
 import { useAppStore } from '../stores/useAppStore'
-
-const CATEGORY_EMOJI: Record<string, string> = {
-  '식비': '🍚', '교통': '🚌', '주거': '🏠', '통신': '📱',
-  '여가': '🎮', '의료': '💊', '급여': '💰', '교육': '📚', '기타': '📦',
-}
+import { CategoryIcon, TrendingUp, TrendingDown, ArrowLeftRight } from '../utils/categoryIcons'
 
 const TYPE_LABEL: Record<TransactionType, string> = { income: '수입', expense: '지출', transfer: '이체' }
 const TYPE_COLOR: Record<TransactionType, string> = { income: '#10B981', expense: '#EF4444', transfer: '#6366F1' }
@@ -37,8 +33,8 @@ export default function TransactionsPage() {
   }, [accounts])
 
   const categoryMap = useMemo(() => {
-    const m = new Map<string, string>()
-    categories.forEach((c) => m.set(c.id, c.name))
+    const m = new Map<string, Category>()
+    categories.forEach((c) => m.set(c.id, c))
     return m
   }, [categories])
 
@@ -108,7 +104,7 @@ export default function TransactionsPage() {
   const itemRowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: '#FFFFFF', borderBottom: '1px solid #F1F5F9' }
   const iconCircleStyle = (color: string): React.CSSProperties => ({
     width: 40, height: 40, borderRadius: '50%', background: color + '1A',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   })
 
   return (
@@ -162,17 +158,27 @@ export default function TransactionsPage() {
           <div key={group.date}>
             <div style={dateHeaderStyle}>{formatDateKorean(group.date)}</div>
             {group.items.map((t) => {
-              const catName = t.category_id ? categoryMap.get(t.category_id) : null
-              const emoji = t.type === 'transfer' ? '🔁' : catName ? (CATEGORY_EMOJI[catName] ?? '📦') : t.type === 'income' ? '💰' : '📦'
+              const cat = t.category_id ? categoryMap.get(t.category_id) : null
               const color = TYPE_COLOR[t.type]
+              const iconColor = cat?.color ?? color
               const accountName = accountMap.get(t.account_id) ?? '알 수 없음'
               const toAccountName = t.to_account_id !== null ? (accountMap.get(t.to_account_id) ?? '알 수 없음') : null
-              const title = t.type === 'transfer' ? '계좌 이체' : (catName ?? (t.type === 'income' ? '수입' : '지출'))
+              const title = t.type === 'transfer' ? '계좌 이체' : (cat?.name ?? (t.type === 'income' ? '수입' : '지출'))
               const meta = t.type === 'transfer' ? `${accountName} → ${toAccountName}` : t.memo || accountName
 
               return (
                 <div key={t.id} style={itemRowStyle}>
-                  <div style={iconCircleStyle(color)}>{emoji}</div>
+                  <div style={iconCircleStyle(iconColor)}>
+                    {t.type === 'transfer' ? (
+                      <ArrowLeftRight size={18} color={iconColor} strokeWidth={1.8} />
+                    ) : cat ? (
+                      <CategoryIcon name={cat.name} size={18} color={iconColor} />
+                    ) : t.type === 'income' ? (
+                      <TrendingUp size={18} color={iconColor} strokeWidth={1.8} />
+                    ) : (
+                      <TrendingDown size={18} color={iconColor} strokeWidth={1.8} />
+                    )}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#1E293B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
                     <div style={{ fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>{meta}</div>
