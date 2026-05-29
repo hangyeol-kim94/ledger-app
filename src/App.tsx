@@ -12,7 +12,7 @@ const AnalyticsPage = React.lazy(() => import('./pages/Analytics'))
 const AddTransactionModal = React.lazy(() => import('./components/AddTransactionModal'))
 
 function App() {
-  const { currentPage, setCurrentPage, isAddTransactionOpen, openAddTransaction, toast } = useAppStore()
+  const { currentPage, setCurrentPage, isAddTransactionOpen, openAddTransaction, editingTransaction, toast } = useAppStore()
   const [unlocked, setUnlocked] = useState(isPinUnlocked)
 
   useEffect(() => {
@@ -30,7 +30,9 @@ function App() {
         {currentPage === 'analytics' && <AnalyticsPage />}
         {currentPage === 'settings' && <SettingsPage />}
 
-        {isAddTransactionOpen && <AddTransactionModal />}
+        {(isAddTransactionOpen || editingTransaction !== null) && (
+          <AddTransactionModal key={editingTransaction?.id ?? 'new'} />
+        )}
 
         {toast && (
           <div className={`toast ${toast.type}`}>{toast.message}</div>

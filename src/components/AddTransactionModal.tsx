@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TransactionType, Amount, Category } from '../types'
-import { getAccounts, getCategories, createTransaction } from '../db'
+import { getAccounts, getCategories, createTransaction, updateTransaction } from '../db'
 import { ulid } from '../utils/ulid'
 import { today } from '../utils/format'
 import { useAppStore } from '../stores/useAppStore'
@@ -12,22 +12,30 @@ const TAB_LABELS: Record<TransactionType, string> = { expense: '지출', income:
 
 export default function AddTransactionModal() {
   const closeAddTransaction = useAppStore((s) => s.closeAddTransaction)
+  const editingTransaction = useAppStore((s) => s.editingTransaction)
+  const closeEditTransaction = useAppStore((s) => s.closeEditTransaction)
   const showToast = useAppStore((s) => s.showToast)
   const queryClient = useQueryClient()
+  const isEditMode = editingTransaction !== null
 
   const { data: allAccounts } = useQuery({ queryKey: ['accounts'], queryFn: getAccounts })
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: getCategories })
 
   const activeAccounts = (allAccounts ?? []).filter((a) => !a.archived)
 
-  const [type, setType] = useState<TransactionType>('expense')
-  const [amountRaw, setAmountRaw] = useState<string>('')
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
-  const [selectedParentId, setSelectedParentId] = useState<string | null>(null)
-  const [fromAccountId, setFromAccountId] = useState<string>('')
-  const [toAccountId, setToAccountId] = useState<string>('')
-  const [selectedDate, setSelectedDate] = useState<string>(today())
-  const [memo, setMemo] = useState<string>('')
+  // Lazy initializers: component is remounted via key prop when editingTransaction changes
+  const [type, setType] = useState<TransactionType>(() => editingTransaction?.type ?? 'expense')
+  const [amountRaw, setAmountRaw] = useState<string>(() => editingTransaction ? String(editingTransaction.amount) : '')
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(() => editingTransaction?.category_id ?? null)
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(() => {
+    if (!editingTransaction?.category_id || !categories) return null
+    const cat = categories.find((c) => c.id === editingTransaction.category_id)
+    return cat?.parent_id ?? null
+  })
+  const [fromAccountId, setFromAccountId] = useState<string>(() => editingTransaction?.account_id ?? '')
+  const [toAccountId, setToAccountId] = useState<string>(() => editingTransaction?.to_account_id ?? '')
+  const [selectedDate, setSelectedDate] = useState<string>(() => editingTransaction?.date ?? today())
+  const [memo, setMemo] = useState<string>(() => editingTransaction?.memo ?? '')
   const [saving, setSaving] = useState(false)
 
   const defaultFromId = activeAccounts[0]?.id ?? ''
@@ -59,7 +67,10 @@ export default function AddTransactionModal() {
     }
   }
 
-  const handleClose = useCallback(() => closeAddTransaction(), [closeAddTransaction])
+  const handleClose = useCallback(() => {
+    if (isEditMode) closeEditTransaction()
+    else closeAddTransaction()
+  }, [isEditMode, closeAddTransaction, closeEditTransaction])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
@@ -81,26 +92,40 @@ export default function AddTransactionModal() {
     setSaving(true)
     try {
       const now = new Date().toISOString()
-      await createTransaction({
-        id: ulid(),
-        type,
-        amount: amountInt as Amount,
-        account_id: effectiveFromAccountId,
-        to_account_id: type === 'transfer' ? effectiveToAccountId : null,
-        date: selectedDate,
-        category_id: type !== 'transfer' ? selectedCategoryId : null,
-        memo,
-        created_at_utc: now,
-        updated_at_utc: now,
-        deleted_at_utc: null,
-      })
+      if (isEditMode) {
+        await updateTransaction(editingTransaction!.id, {
+          type,
+          amount: amountInt as Amount,
+          account_id: effectiveFromAccountId,
+          to_account_id: type === 'transfer' ? effectiveToAccountId : null,
+          date: selectedDate,
+          category_id: type !== 'transfer' ? selectedCategoryId : null,
+          memo,
+          updated_at_utc: now,
+        })
+        showToast('거래가 수정되었습니다')
+      } else {
+        await createTransaction({
+          id: ulid(),
+          type,
+          amount: amountInt as Amount,
+          account_id: effectiveFromAccountId,
+          to_account_id: type === 'transfer' ? effectiveToAccountId : null,
+          date: selectedDate,
+          category_id: type !== 'transfer' ? selectedCategoryId : null,
+          memo,
+          created_at_utc: now,
+          updated_at_utc: now,
+          deleted_at_utc: null,
+        })
+        showToast('거래가 저장되었습니다')
+      }
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['balances'] })
-      showToast('거래가 저장되었습니다')
-      closeAddTransaction()
+      handleClose()
     } catch (err) {
       console.error(err)
-      showToast('저장에 실패했습니다', 'error')
+      showToast(isEditMode ? '수정에 실패했습니다' : '저장에 실패했습니다', 'error')
     } finally {
       setSaving(false)
     }
@@ -121,7 +146,7 @@ export default function AddTransactionModal() {
         <div style={{ width: 36, height: 4, background: '#E2E8F0', borderRadius: 2, margin: '4px auto 16px' }} />
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>거래 추가</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1E293B' }}>{isEditMode ? '거래 수정' : '거래 추가'}</h2>
           <button onClick={handleClose} aria-label="닫기" style={{ background: 'transparent', fontSize: 24, color: '#94A3B8', padding: 4, lineHeight: 1 }}>×</button>
         </div>
 
@@ -210,7 +235,7 @@ export default function AddTransactionModal() {
         <input type="text" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모를 입력하세요" style={selectStyle} maxLength={100} />
 
         <button onClick={handleSave} disabled={saving} style={{ width: '100%', background: '#2563EB', color: '#FFFFFF', padding: '14px 0', borderRadius: 12, fontSize: 16, fontWeight: 700, marginTop: 24, opacity: saving ? 0.6 : 1 }}>
-          {saving ? '저장 중...' : '저장하기'}
+          {saving ? (isEditMode ? '수정 중...' : '저장 중...') : (isEditMode ? '수정하기' : '저장하기')}
         </button>
       </div>
     </div>

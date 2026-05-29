@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { currentMonth } from '../utils/format'
+import type { Transaction } from '../types'
 
 interface AppState {
   // Navigation
@@ -10,10 +11,15 @@ interface AppState {
   selectedMonth: string // 'YYYY-MM'
   setSelectedMonth: (month: string) => void
 
-  // Modal state
+  // Modal state — add
   isAddTransactionOpen: boolean
   openAddTransaction: () => void
   closeAddTransaction: () => void
+
+  // Modal state — edit
+  editingTransaction: Transaction | null
+  openEditTransaction: (t: Transaction) => void
+  closeEditTransaction: () => void
 
   // Toast notifications
   toast: { message: string; type: 'success' | 'error' | 'info' } | null
@@ -31,6 +37,10 @@ export const useAppStore = create<AppState>()((set) => ({
   isAddTransactionOpen: false,
   openAddTransaction: () => set({ isAddTransactionOpen: true }),
   closeAddTransaction: () => set({ isAddTransactionOpen: false }),
+
+  editingTransaction: null,
+  openEditTransaction: (t) => set({ editingTransaction: t }),
+  closeEditTransaction: () => set({ editingTransaction: null }),
 
   toast: null,
   showToast: (message, type = 'success') => {

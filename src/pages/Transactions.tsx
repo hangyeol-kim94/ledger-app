@@ -5,6 +5,7 @@ import { getAccounts, getCategories, getTransactionsByMonth, updateTransaction }
 import { formatKRW, formatKRWSigned, formatDateKorean, formatMonthKorean, navigateMonth } from '../utils/format'
 import { useAppStore } from '../stores/useAppStore'
 import { CategoryIcon, TrendingUp, TrendingDown, ArrowLeftRight } from '../utils/categoryIcons'
+import { Pencil } from 'lucide-react'
 
 const TYPE_LABEL: Record<TransactionType, string> = { income: '수입', expense: '지출', transfer: '이체' }
 const TYPE_COLOR: Record<TransactionType, string> = { income: '#10B981', expense: '#EF4444', transfer: '#6366F1' }
@@ -13,6 +14,7 @@ export default function TransactionsPage() {
   const selectedMonth = useAppStore((s) => s.selectedMonth)
   const setSelectedMonth = useAppStore((s) => s.setSelectedMonth)
   const showToast = useAppStore((s) => s.showToast)
+  const openEditTransaction = useAppStore((s) => s.openEditTransaction)
   const queryClient = useQueryClient()
 
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null)
@@ -187,13 +189,22 @@ export default function TransactionsPage() {
                     <div style={{ fontSize: 14, fontWeight: 700, color, whiteSpace: 'nowrap' }}>{formatKRWSigned(t.amount, t.type)}</div>
                     {t.type !== 'transfer' && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{accountName}</div>}
                   </div>
-                  <button
-                    onClick={() => { if (confirm('이 거래를 삭제하시겠습니까?')) handleDelete(t.id) }}
-                    aria-label="삭제"
-                    style={{ background: 'transparent', color: '#94A3B8', fontSize: 18, padding: 4, lineHeight: 1, flexShrink: 0 }}
-                  >
-                    ×
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                    <button
+                      onClick={() => openEditTransaction(t)}
+                      aria-label="수정"
+                      style={{ background: 'transparent', color: '#94A3B8', padding: 4, lineHeight: 1, display: 'flex' }}
+                    >
+                      <Pencil size={14} strokeWidth={1.8} />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm('이 거래를 삭제하시겠습니까?')) handleDelete(t.id) }}
+                      aria-label="삭제"
+                      style={{ background: 'transparent', color: '#94A3B8', fontSize: 18, padding: 4, lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               )
             })}
