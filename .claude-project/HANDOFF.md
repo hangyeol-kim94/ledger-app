@@ -1,7 +1,7 @@
 ---
 created: 2026-07-03T16:45:00+09:00
 project: ledger-app
-summary: 라이브 DB에 수입 카테고리가 전혀 없는 문제 진단 + SQL 마이그레이션 정리, 실제 실행은 아직 안 됨
+summary: 수입 카테고리 누락 문제 진단·수정·마이그레이션 적용까지 완료, 사용자가 라이브에서 정상 표시 확인함
 ---
 
 ## Session Digest
@@ -24,22 +24,19 @@ summary: 라이브 DB에 수입 카테고리가 전혀 없는 문제 진단 + SQ
 - `supabase/add_income_categories.sql` 작성 — 이름 기준 존재 여부 체크로 완전히 idempotent하게 재작성, 실행 순서/중복과 무관하게 안전하도록 처리, 파일 상단에 "권장: 아래 정식 마이그레이션 2개를 먼저 실행하라"는 안내 주석 추가
 - 기존 마이그레이션 2개(`migrate_add_category_type.sql`, `migrate_add_income_subcategories.sql`) 내용을 직접 Read로 재확인 — 둘 다 `IF NOT EXISTS` / `WHERE NOT EXISTS` / `ON CONFLICT DO NOTHING` 패턴으로 이미 idempotent하며, '월급' 포함 8개 리프 카테고리가 모두 반영되어 있음. **추가 수정 불필요, 지금 상태로 실행 가능**
 - 4개 커밋 모두 `origin/master`에 push 완료 (`47df132`, `d445193`, `16423ee`, `3fdbede`)
+- **사용자가 Supabase SQL Editor에서 마이그레이션을 직접 실행함.** 이후 라이브 앱에서 "월급" 카테고리가 정상 표시되고, "기타"와 아이콘도 구분됨을 직접 확인·확정함 (2026-07-03). 이 세션의 작업은 완전히 종료된 상태.
 
-### 미완료 (가장 중요)
-- **세 SQL 스크립트 중 어느 것도 라이브 프로덕션 Supabase DB에 아직 실행되지 않음.** 즉, 지금 이 순간에도 실제 서비스의 수입 카테고리는 비어 있는 상태이며, 사용자가 Supabase SQL Editor에서 직접 실행해야만 문제가 해결된다.
+### 미완료
+- 없음. (선택 항목이었던 기존 수입 거래의 category_id 수동 연결, `add_income_categories.sql` 정리 여부는 급하지 않아 보류 중 — 아래 Next Steps 참고)
 
 ## Next Steps (우선순위 순)
 
-1. **(최우선)** Supabase 대시보드 > SQL Editor에서 `supabase/migrate_add_category_type.sql` 실행 — `categories.type` 컬럼 추가 + CHECK 제약 + 기존 거래 내역 기반 income 백필
-2. 이어서 `supabase/migrate_add_income_subcategories.sql` 실행 — '월급/수입' 상위 카테고리 + 하위 8개 카테고리(월급 포함) 생성
-3. 실행 후 앱에서 "거래 추가" 모달과 "설정 > 카테고리 관리" 화면의 수입(income) 탭에 카테고리가 정상적으로 표시되는지 직접 확인
-4. (선택) `import_data.sql`로 이미 들어와 있던 수입 거래(월급, 이자, 캐시백 등)는 `category_id`가 NULL일 가능성이 높음 — 필요하면 `add_income_categories.sql` 하단에 주석 처리된 UPDATE 문을 참고해 수동으로 분류 연결
-5. (선택, 낮은 우선순위) `add_income_categories.sql`은 이제 대안/폴백용으로만 남겨두거나, 정식 마이그레이션 2개로 목적이 흡수되었으므로 정리 여부 판단 — 기능상 문제는 없으므로 급하지 않음
+1. (선택) `import_data.sql`로 이미 들어와 있던 수입 거래(월급, 이자, 캐시백 등)는 `category_id`가 NULL일 가능성이 높음 — 필요하면 `add_income_categories.sql` 하단에 주석 처리된 UPDATE 문을 참고해 수동으로 분류 연결
+2. (선택, 낮은 우선순위) `add_income_categories.sql`은 정식 마이그레이션 2개로 목적이 흡수되었으므로 참고/폴백용으로만 남겨두거나 정리 여부 판단 — 기능상 문제는 없으므로 급하지 않음
 
 ## Blockers
 
-- 이 세션에는 `.env`/Supabase 자격 증명이 없어 SQL을 직접 실행하거나 라이브 DB 상태를 조회/검증할 수 없었다. **사용자가 Supabase SQL Editor에서 수동으로 실행해야 함.**
-- 위 마이그레이션이 실행되기 전까지는 프로덕션 앱에서 수입 카테고리 관련 화면이 계속 비어 보이는 것이 정상이며, 이는 알려진 상태이지 새로운 버그가 아니다.
+없음.
 
 ## Watch Out
 
