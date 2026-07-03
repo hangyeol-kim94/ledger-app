@@ -109,7 +109,7 @@ export default function HomePage() {
     const map = new Map<string, number>()
     if (!transactions) return map
     for (const t of transactions) {
-      if (t.type === 'expense' && t.category_id) {
+      if (t.type === 'expense' && t.category_id && !t.exclude_from_budget) {
         map.set(t.category_id, (map.get(t.category_id) ?? 0) + t.amount)
       }
     }
@@ -120,7 +120,7 @@ export default function HomePage() {
     const map = new Map<string, number>()
     if (!transactions) return map
     for (const t of transactions) {
-      if (t.type === 'expense') {
+      if (t.type === 'expense' && !t.exclude_from_budget) {
         map.set(t.account_id, (map.get(t.account_id) ?? 0) + t.amount)
       }
     }
@@ -245,6 +245,7 @@ export default function HomePage() {
                     ? expenseByAccount.get(b.account_id) ?? 0
                     : 0
                   const ratio = b.limit_amount > 0 ? spent / b.limit_amount : 0
+                  const remaining = b.limit_amount - spent
                   const barColor = ratio >= 1 ? '#EF4444' : ratio >= 0.8 ? '#D97706' : '#059669'
                   return (
                     <div key={b.id}>
@@ -254,6 +255,12 @@ export default function HomePage() {
                       </div>
                       <div style={{ height: 6, borderRadius: 3, background: '#E2E8F0', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${Math.min(ratio, 1) * 100}%`, background: barColor, borderRadius: 3, transition: 'width 0.3s' }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                        <span style={{ fontSize: 11, color: remaining < 0 ? '#EF4444' : 'var(--muted)' }}>
+                          {remaining < 0 ? `${formatKRW(-remaining)} 초과` : `${formatKRW(remaining)} 남음`}
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: barColor }}>{Math.round(ratio * 100)}%</span>
                       </div>
                     </div>
                   )

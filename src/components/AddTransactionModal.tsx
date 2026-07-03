@@ -36,6 +36,7 @@ export default function AddTransactionModal() {
   const [toAccountId, setToAccountId] = useState<string>(() => editingTransaction?.to_account_id ?? '')
   const [selectedDate, setSelectedDate] = useState<string>(() => editingTransaction?.date ?? today())
   const [memo, setMemo] = useState<string>(() => editingTransaction?.memo ?? '')
+  const [excludeFromBudget, setExcludeFromBudget] = useState<boolean>(() => editingTransaction?.exclude_from_budget ?? false)
   const [saving, setSaving] = useState(false)
 
   const defaultFromId = activeAccounts[0]?.id ?? ''
@@ -101,6 +102,7 @@ export default function AddTransactionModal() {
           date: selectedDate,
           category_id: type !== 'transfer' ? selectedCategoryId : null,
           memo,
+          exclude_from_budget: type === 'expense' ? excludeFromBudget : false,
           updated_at_utc: now,
         })
         showToast('거래가 수정되었습니다')
@@ -114,6 +116,7 @@ export default function AddTransactionModal() {
           date: selectedDate,
           category_id: type !== 'transfer' ? selectedCategoryId : null,
           memo,
+          exclude_from_budget: type === 'expense' ? excludeFromBudget : false,
           created_at_utc: now,
           updated_at_utc: now,
           deleted_at_utc: null,
@@ -233,6 +236,18 @@ export default function AddTransactionModal() {
 
         <div style={fieldLabelStyle}>메모 (선택)</div>
         <input type="text" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모를 입력하세요" style={selectStyle} maxLength={100} />
+
+        {type === 'expense' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={excludeFromBudget}
+              onChange={(e) => setExcludeFromBudget(e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: '#2563EB', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#1E293B' }}>이 항목은 예산에서 제외</span>
+          </label>
+        )}
 
         <button onClick={handleSave} disabled={saving} style={{ width: '100%', background: '#2563EB', color: '#FFFFFF', padding: '14px 0', borderRadius: 12, fontSize: 16, fontWeight: 700, marginTop: 24, opacity: saving ? 0.6 : 1 }}>
           {saving ? (isEditMode ? '수정 중...' : '저장 중...') : (isEditMode ? '수정하기' : '저장하기')}

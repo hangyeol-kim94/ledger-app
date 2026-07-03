@@ -108,7 +108,7 @@ export default function AnalyticsPage() {
     const map = new Map<string, number>()
     if (!allTransactions) return map
     for (const t of allTransactions) {
-      if (t.date.startsWith(selectedMonth) && t.type === 'expense' && t.category_id) {
+      if (t.date.startsWith(selectedMonth) && t.type === 'expense' && t.category_id && !t.exclude_from_budget) {
         map.set(t.category_id, (map.get(t.category_id) ?? 0) + t.amount)
       }
     }
@@ -120,7 +120,7 @@ export default function AnalyticsPage() {
     const map = new Map<string, number>()
     if (!allTransactions) return map
     for (const t of allTransactions) {
-      if (t.date.startsWith(selectedMonth) && t.type === 'expense') {
+      if (t.date.startsWith(selectedMonth) && t.type === 'expense' && !t.exclude_from_budget) {
         map.set(t.account_id, (map.get(t.account_id) ?? 0) + t.amount)
       }
     }

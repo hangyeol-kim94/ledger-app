@@ -32,6 +32,7 @@ export interface Transaction {
   date: string            // 'YYYY-MM-DD' local TZ (user-selected)
   category_id: CategoryId | null   // null for transfers
   memo: string
+  exclude_from_budget: boolean     // true = don't count toward budget spend tracking
   created_at_utc: string  // ISO 8601 UTC
   updated_at_utc: string
   deleted_at_utc: string | null    // soft delete

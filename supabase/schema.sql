@@ -35,6 +35,7 @@ CREATE TABLE transactions (
   date TEXT NOT NULL,
   category_id TEXT REFERENCES categories(id),
   memo TEXT NOT NULL DEFAULT '',
+  exclude_from_budget BOOLEAN NOT NULL DEFAULT FALSE,
   created_at_utc TIMESTAMPTZ NOT NULL,
   updated_at_utc TIMESTAMPTZ NOT NULL,
   deleted_at_utc TIMESTAMPTZ
