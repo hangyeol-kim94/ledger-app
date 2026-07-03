@@ -1,7 +1,7 @@
 # Memory Index
 
-- [category-2level-hierarchy](category-2level-hierarchy.md) — 지출 카테고리 2단계 계층 설계 결정 및 DB parent_id 구조
-- [supabase-migration-pattern](supabase-migration-pattern.md) — Supabase 스키마 변경 4단계 패턴 + 실제 적용은 SQL Editor 수동 실행(사용자 확인 필수)
+- [category-2level-hierarchy](category-2level-hierarchy.md) — 카테고리 2단계 계층 + type(income/expense) 필드 및 4곳 필터링 불변식
+- [supabase-migration-pattern](supabase-migration-pattern.md) — Supabase 스키마 변경 4단계 패턴, 관계 데이터 기반 백필, 부모 행 존재 보장(self-healing insert)
 - [lucide-icon-pattern](lucide-icon-pattern.md) — lucide-react ICON_MAP으로 카테고리명→아이콘 매핑
 - [eslint-react-hooks-fixes](eslint-react-hooks-fixes.md) — react-hooks/immutability 및 set-state-in-effect 오류 수정 패턴
 - [recharts-tooltip-type-fix](recharts-tooltip-type-fix.md) — Recharts Tooltip formatter 파라미터 타입 오류 수정 패턴
