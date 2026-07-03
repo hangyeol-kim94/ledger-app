@@ -143,7 +143,9 @@ export default function TransactionsPage() {
         </select>
         <select value={filterCategoryId ?? ''} onChange={(e) => setFilterCategoryId(e.target.value || null)} style={{ ...chipStyle(filterCategoryId !== null), border: filterCategoryId !== null ? '1px solid #2563EB' : '1px solid transparent', outline: 'none', cursor: 'pointer' }}>
           <option value="">전체 카테고리</option>
-          {categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {categories
+            .filter((c) => !c.archived && (filterType === 'income' || filterType === 'expense' ? c.type === filterType : true))
+            .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 

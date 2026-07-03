@@ -42,6 +42,7 @@ export interface Category {
   id: CategoryId          // ULID
   name: string
   color: string           // hex
+  type: 'income' | 'expense'
   parent_id: CategoryId | null
   archived: boolean
   created_at_utc: string

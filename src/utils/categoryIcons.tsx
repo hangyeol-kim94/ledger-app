@@ -9,6 +9,7 @@ import {
   Smartphone, AppWindow,
   CreditCard, Shield, Percent,
   Users, Flower2, Gift, Wine,
+  Banknote, Landmark, HandCoins, Award, Split, Coins, Briefcase,
   MoreHorizontal,
   TrendingUp, TrendingDown, ArrowLeftRight,
   type LucideIcon,
@@ -26,6 +27,14 @@ const ICON_MAP: Record<string, LucideIcon> = {
   '통신': Smartphone,
   '금융': CreditCard,
   '사교': Users,
+  // 수입
+  '월급/수입': Banknote,
+  '금융수입': Landmark,
+  '용돈': HandCoins,
+  '상여금': Award,
+  '더치페이': Split,
+  '앱테크': Coins,
+  '사업수입': Briefcase,
   // 식생활
   '마트/식재료': ShoppingCart,
   '외식': Utensils,

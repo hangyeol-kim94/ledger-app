@@ -61,6 +61,7 @@ export default function SettingsPage() {
   const [newCatName, setNewCatName] = useState('')
   const [newCatColor, setNewCatColor] = useState(COLOR_PRESETS[0])
   const [newCatParentId, setNewCatParentId] = useState('')
+  const [catManageType, setCatManageType] = useState<'expense' | 'income'>('expense')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [editingColor, setEditingColor] = useState('')
@@ -73,13 +74,14 @@ export default function SettingsPage() {
   })
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(() => makeEmptyBudgetForm(currentMonth()))
   const [budgetFormOpen, setBudgetFormOpen] = useState(false)
-  const activeCatsForBudget = useMemo(() => categories.filter((c) => !c.archived), [categories])
+  // 예산은 지출 추적 전용(computeBudgetSpent가 income 거래를 집계하지 않음) — 지출 카테고리만 연결 대상으로 노출
+  const activeCatsForBudget = useMemo(() => categories.filter((c) => !c.archived && c.type === 'expense'), [categories])
   const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const activeAccountsForBudget = useMemo(() => accountsForBudget.filter((a) => !a.archived), [accountsForBudget])
   const accountsById = useMemo(() => new Map(accountsForBudget.map((a) => [a.id, a])), [accountsForBudget])
 
-  const activeCats = useMemo(() => categories.filter((c) => !c.archived), [categories])
-  const archivedCats = useMemo(() => categories.filter((c) => c.archived), [categories])
+  const activeCats = useMemo(() => categories.filter((c) => !c.archived && c.type === catManageType), [categories, catManageType])
+  const archivedCats = useMemo(() => categories.filter((c) => c.archived && c.type === catManageType), [categories, catManageType])
 
   const parentCats = useMemo(() => activeCats.filter((c) => c.parent_id === null), [activeCats])
   const childCatsMap = useMemo(() => {
@@ -191,7 +193,7 @@ export default function SettingsPage() {
     const name = newCatName.trim()
     if (!name) { showToast('카테고리 이름을 입력해주세요', 'error'); return }
     await createCategory({
-      id: ulid(), name, color: newCatColor,
+      id: ulid(), name, color: newCatColor, type: catManageType,
       parent_id: newCatParentId || null,
       archived: false, created_at_utc: new Date().toISOString(),
     })
@@ -337,6 +339,22 @@ export default function SettingsPage() {
 
       <SectionTitle>카테고리 관리</SectionTitle>
       <Section>
+        <div style={{ display: 'flex', gap: 4, padding: '10px 20px 0', background: 'var(--bg)' }}>
+          {(['expense', 'income'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => { setCatManageType(t); setNewCatParentId(''); cancelEditCat() }}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: '8px 8px 0 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                border: 'none', borderBottom: catManageType === t ? '2px solid var(--primary)' : '2px solid transparent',
+                background: 'transparent', color: catManageType === t ? 'var(--primary)' : 'var(--muted)',
+              }}
+            >
+              {t === 'expense' ? '지출' : '수입'}
+            </button>
+          ))}
+        </div>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
             <input type="text" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="새 카테고리 이름" style={{ flex: 1, padding: '8px 12px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)' }} />

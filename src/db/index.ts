@@ -224,19 +224,20 @@ export async function initializeDB(): Promise<void> {
 
   // Level 1 parents
   const level1Defs = [
-    { name: '식생활',   color: '#F97316' },
-    { name: '주거',     color: '#3B82F6' },
-    { name: '교통',     color: '#10B981' },
-    { name: '건강',     color: '#EF4444' },
-    { name: '쇼핑',     color: '#0EA5E9' },
-    { name: '여가/문화',color: '#EC4899' },
-    { name: '교육',     color: '#F59E0B' },
-    { name: '통신',     color: '#8B5CF6' },
-    { name: '금융',     color: '#1D4ED8' },
-    { name: '사교',     color: '#84CC16' },
+    { name: '월급/수입', color: '#10B981', type: 'income' as const },
+    { name: '식생활',   color: '#F97316', type: 'expense' as const },
+    { name: '주거',     color: '#3B82F6', type: 'expense' as const },
+    { name: '교통',     color: '#10B981', type: 'expense' as const },
+    { name: '건강',     color: '#EF4444', type: 'expense' as const },
+    { name: '쇼핑',     color: '#0EA5E9', type: 'expense' as const },
+    { name: '여가/문화',color: '#EC4899', type: 'expense' as const },
+    { name: '교육',     color: '#F59E0B', type: 'expense' as const },
+    { name: '통신',     color: '#8B5CF6', type: 'expense' as const },
+    { name: '금융',     color: '#1D4ED8', type: 'expense' as const },
+    { name: '사교',     color: '#84CC16', type: 'expense' as const },
   ]
   const level1Rows = level1Defs.map((c) => ({
-    id: ulid(), name: c.name, color: c.color, parent_id: null, archived: false, created_at_utc: now,
+    id: ulid(), name: c.name, color: c.color, type: c.type, parent_id: null, archived: false, created_at_utc: now,
   }))
   const { error: e1 } = await supabase.from('categories').insert(level1Rows)
   if (e1) throw e1
@@ -246,6 +247,11 @@ export async function initializeDB(): Promise<void> {
 
   // Level 2 subcategories
   const level2Defs: Array<{ name: string; parent: string }> = [
+    // 월급/수입
+    { name: '금융수입', parent: '월급/수입' }, { name: '용돈',   parent: '월급/수입' },
+    { name: '상여금',   parent: '월급/수입' }, { name: '더치페이', parent: '월급/수입' },
+    { name: '앱테크',   parent: '월급/수입' }, { name: '사업수입', parent: '월급/수입' },
+    { name: '기타',     parent: '월급/수입' },
     // 식생활
     { name: '마트/식재료', parent: '식생활' }, { name: '외식',     parent: '식생활' },
     { name: '배달',        parent: '식생활' }, { name: '카페/음료', parent: '식생활' },
@@ -278,7 +284,7 @@ export async function initializeDB(): Promise<void> {
   const level2Rows = level2Defs.map((c) => {
     const parentRow = level1Rows.find((p) => p.name === c.parent)!
     return {
-      id: ulid(), name: c.name, color: parentRow.color,
+      id: ulid(), name: c.name, color: parentRow.color, type: parentRow.type,
       parent_id: parentIdMap.get(c.parent) ?? null,
       archived: false, created_at_utc: now,
     }

@@ -20,6 +20,7 @@ CREATE TABLE categories (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   color TEXT NOT NULL DEFAULT '#6B7280',
+  type TEXT NOT NULL DEFAULT 'expense' CHECK (type IN ('income', 'expense')),
   archived BOOLEAN NOT NULL DEFAULT FALSE,
   created_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   parent_id TEXT REFERENCES categories(id)

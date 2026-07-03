@@ -52,7 +52,7 @@ export default function AddTransactionModal() {
   const amountInt = amountRaw === '' ? 0 : parseInt(amountRaw, 10)
   const amountDisplay = amountRaw === '' ? '' : Number(amountRaw).toLocaleString('ko-KR')
 
-  const parentCats = (categories ?? []).filter((c) => c.parent_id === null && !c.archived)
+  const parentCats = (categories ?? []).filter((c) => c.parent_id === null && !c.archived && c.type === type)
   const childCats = selectedParentId
     ? (categories ?? []).filter((c) => c.parent_id === selectedParentId && !c.archived)
     : []
