@@ -40,13 +40,15 @@ CREATE TABLE transactions (
   deleted_at_utc TIMESTAMPTZ
 );
 
--- 예산 (scaffold)
+-- 예산
 CREATE TABLE budgets (
   id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
   category_id TEXT REFERENCES categories(id),
   account_id TEXT REFERENCES accounts(id),
   month TEXT NOT NULL,
-  limit_amount INTEGER NOT NULL
+  limit_amount INTEGER NOT NULL,
+  created_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 앱 메타 (싱글톤)
@@ -80,3 +82,4 @@ CREATE INDEX idx_transactions_date        ON transactions(date);
 CREATE INDEX idx_transactions_account_id  ON transactions(account_id);
 CREATE INDEX idx_transactions_deleted_at  ON transactions(deleted_at_utc);
 CREATE INDEX idx_transactions_category_id ON transactions(category_id);
+CREATE INDEX idx_budgets_month            ON budgets(month);

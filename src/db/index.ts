@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import type { Account, Transaction, Category, AppMeta } from '../types'
+import type { Account, Transaction, Category, AppMeta, Budget } from '../types'
 
 // ─── Accounts ───
 
@@ -153,6 +153,43 @@ export async function computeAllBalances(): Promise<Record<string, number>> {
 export async function computeAccountBalance(accountId: string): Promise<number> {
   const balances = await computeAllBalances()
   return balances[accountId] ?? 0
+}
+
+// ─── Budgets ───
+
+export async function getBudgets(): Promise<Budget[]> {
+  const { data, error } = await supabase
+    .from('budgets')
+    .select('*')
+    .order('month', { ascending: false })
+    .order('created_at_utc')
+  if (error) throw error
+  return (data ?? []) as Budget[]
+}
+
+export async function getBudgetsByMonth(month: string): Promise<Budget[]> {
+  const { data, error } = await supabase
+    .from('budgets')
+    .select('*')
+    .eq('month', month)
+    .order('created_at_utc')
+  if (error) throw error
+  return (data ?? []) as Budget[]
+}
+
+export async function createBudget(budget: Budget): Promise<void> {
+  const { error } = await supabase.from('budgets').insert(budget)
+  if (error) throw error
+}
+
+export async function updateBudget(id: string, updates: Partial<Budget>): Promise<void> {
+  const { error } = await supabase.from('budgets').update(updates).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteBudget(id: string): Promise<void> {
+  const { error } = await supabase.from('budgets').delete().eq('id', id)
+  if (error) throw error
 }
 
 // ─── Meta ───

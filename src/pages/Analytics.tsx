@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
-import { getActiveTransactions, getCategories } from '../db'
-import type { Category } from '../types'
+import { getActiveTransactions, getCategories, getAccounts, getBudgetsByMonth } from '../db'
+import type { Category, Account } from '../types'
 import { formatKRW, formatMonthKorean, navigateMonth, currentMonth } from '../utils/format'
 import DonutChart, { type DonutSlice } from '../components/DonutChart'
 
@@ -32,10 +32,20 @@ export default function AnalyticsPage() {
     queryFn: getActiveTransactions,
   })
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: getCategories })
+  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: getAccounts })
+  const { data: budgets } = useQuery({
+    queryKey: ['budgets', selectedMonth],
+    queryFn: () => getBudgetsByMonth(selectedMonth),
+  })
 
   const catById = useMemo<Map<string, Category>>(
     () => new Map((categories ?? []).map((c) => [c.id, c])),
     [categories]
+  )
+
+  const accountById = useMemo<Map<string, Account>>(
+    () => new Map((accounts ?? []).map((a) => [a.id, a])),
+    [accounts]
   )
 
   // ── 최근 6개월 수입/지출 ──
@@ -93,6 +103,30 @@ export default function AnalyticsPage() {
     }))
   }, [allTransactions, selectedMonth, selectedTotals.expense, catById])
 
+  // ── 카테고리별 지출 (예산 진행률용) ──
+  const expenseByCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    if (!allTransactions) return map
+    for (const t of allTransactions) {
+      if (t.date.startsWith(selectedMonth) && t.type === 'expense' && t.category_id) {
+        map.set(t.category_id, (map.get(t.category_id) ?? 0) + t.amount)
+      }
+    }
+    return map
+  }, [allTransactions, selectedMonth])
+
+  // ── 계좌별 지출 (예산 진행률용) ──
+  const expenseByAccount = useMemo(() => {
+    const map = new Map<string, number>()
+    if (!allTransactions) return map
+    for (const t of allTransactions) {
+      if (t.date.startsWith(selectedMonth) && t.type === 'expense') {
+        map.set(t.account_id, (map.get(t.account_id) ?? 0) + t.amount)
+      }
+    }
+    return map
+  }, [allTransactions, selectedMonth])
+
   // ── 요일별 지출 ──
   const dowData = useMemo(() => {
     const sums = [0, 0, 0, 0, 0, 0, 0]
@@ -108,7 +142,7 @@ export default function AnalyticsPage() {
     return DOW_LABELS.map((day, i) => ({ day, amount: sums[i], max }))
   }, [allTransactions, selectedMonth])
 
-  const loading = !allTransactions || !categories
+  const loading = !allTransactions || !categories || !accounts || !budgets
 
   const tooltipFormatter = (value: number | string | readonly (number | string)[] | undefined) =>
     typeof value === 'number' ? formatKRW(value) : ''
@@ -249,6 +283,48 @@ export default function AnalyticsPage() {
                 ))}
               </div>
             </>
+          )}
+        </div>
+      </section>
+
+      {/* 이번 달 예산 */}
+      <section style={{ padding: '0 20px', marginTop: 20 }}>
+        <div style={sectionTitleStyle}>{formatMonthKorean(selectedMonth)} 예산</div>
+        <div style={cardStyle}>
+          {loading ? (
+            <div style={emptyStyle}>불러오는 중…</div>
+          ) : !budgets || budgets.length === 0 ? (
+            <div style={emptyStyle}>설정된 예산이 없습니다</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {budgets.map((b) => {
+                const cat = b.category_id ? catById.get(b.category_id) ?? null : null
+                const acc = b.account_id ? accountById.get(b.account_id) ?? null : null
+                const spent = b.category_id
+                  ? expenseByCategory.get(b.category_id) ?? 0
+                  : b.account_id
+                  ? expenseByAccount.get(b.account_id) ?? 0
+                  : null
+                const ratio = spent !== null && b.limit_amount > 0 ? spent / b.limit_amount : 0
+                const barColor = ratio >= 1 ? '#EF4444' : ratio >= 0.8 ? '#D97706' : '#059669'
+                return (
+                  <div key={b.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{b.name}</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                        {spent !== null ? `${formatKRW(spent)} / ${formatKRW(b.limit_amount)}` : `${formatKRW(b.limit_amount)} · 자유 항목`}
+                      </span>
+                    </div>
+                    {spent !== null && (
+                      <div style={{ height: 6, borderRadius: 3, background: '#E2E8F0', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(ratio, 1) * 100}%`, background: barColor, borderRadius: 3, transition: 'width 0.3s' }} />
+                      </div>
+                    )}
+                    {(cat || acc) && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{cat ? cat.name : acc!.name}</div>}
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       </section>

@@ -1,13 +1,16 @@
 import { useState, useRef, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Category } from '../types'
+import type { Category, Budget, Account } from '../types'
+import { toAmount } from '../types'
 import {
   getCategories, createCategory, updateCategory, deleteCategory,
   getAccounts, getAllTransactions, getActiveTransactions, getMeta, updateMeta,
   getTransactionCountByCategoryId,
+  getBudgets, getBudgetsByMonth, createBudget, updateBudget, deleteBudget,
 } from '../db'
 import { importWithMigration } from '../db/migrations'
 import { ulid } from '../utils/ulid'
+import { formatKRW, currentMonth, formatMonthKorean, navigateMonth } from '../utils/format'
 import { useAppStore } from '../stores/useAppStore'
 import { CategoryIcon } from '../utils/categoryIcons'
 
@@ -15,12 +18,26 @@ const COLOR_PRESETS = ['#2563EB', '#7C3AED', '#D97706', '#059669', '#DC2626', '#
 const APP_VERSION = '1.0.0'
 const SCHEMA_VERSION = 1
 
+type BudgetLinkType = 'none' | 'category' | 'account'
+
+interface BudgetFormState {
+  id: string | null
+  name: string
+  linkType: BudgetLinkType
+  category_id: string
+  account_id: string
+  limit_amount: string
+}
+
+const emptyBudgetForm: BudgetFormState = { id: null, name: '', linkType: 'none', category_id: '', account_id: '', limit_amount: '' }
+
 export default function SettingsPage() {
   const showToast = useAppStore((s) => s.showToast)
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: getCategories })
+  const { data: accountsForBudget = [] } = useQuery({ queryKey: ['accounts'], queryFn: getAccounts })
   const { data: meta } = useQuery({ queryKey: ['meta'], queryFn: getMeta })
 
   const [newCatName, setNewCatName] = useState('')
@@ -30,6 +47,18 @@ export default function SettingsPage() {
   const [editingName, setEditingName] = useState('')
   const [editingColor, setEditingColor] = useState('')
   const [showArchivedCats, setShowArchivedCats] = useState(false)
+
+  const [budgetMonth, setBudgetMonth] = useState(currentMonth())
+  const { data: budgets = [] } = useQuery({
+    queryKey: ['budgets', budgetMonth],
+    queryFn: () => getBudgetsByMonth(budgetMonth),
+  })
+  const [budgetForm, setBudgetForm] = useState<BudgetFormState>(emptyBudgetForm)
+  const [budgetFormOpen, setBudgetFormOpen] = useState(false)
+  const activeCatsForBudget = useMemo(() => categories.filter((c) => !c.archived), [categories])
+  const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const activeAccountsForBudget = useMemo(() => accountsForBudget.filter((a) => !a.archived), [accountsForBudget])
+  const accountsById = useMemo(() => new Map(accountsForBudget.map((a) => [a.id, a])), [accountsForBudget])
 
   const activeCats = useMemo(() => categories.filter((c) => !c.archived), [categories])
   const archivedCats = useMemo(() => categories.filter((c) => c.archived), [categories])
@@ -49,17 +78,18 @@ export default function SettingsPage() {
 
   async function exportJSON() {
     try {
-      const [accounts, transactions, cats, m] = await Promise.all([
+      const [accounts, transactions, cats, budgets, m] = await Promise.all([
         getAccounts(),
         getAllTransactions(),
         getCategories(),
+        getBudgets(),
         getMeta(),
       ])
       const data = {
         schema_version: m?.schema_version ?? SCHEMA_VERSION,
         app_version: m?.app_version ?? APP_VERSION,
         exported_at: new Date().toISOString(),
-        accounts, transactions, categories: cats,
+        accounts, transactions, categories: cats, budgets,
       }
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -189,6 +219,83 @@ export default function SettingsPage() {
     showToast('카테고리가 복원되었습니다')
   }
 
+  function openAddBudgetForm() {
+    setBudgetForm(emptyBudgetForm)
+    setBudgetFormOpen(true)
+  }
+
+  function openEditBudgetForm(b: Budget) {
+    const linkType: BudgetLinkType = b.category_id ? 'category' : b.account_id ? 'account' : 'none'
+    setBudgetForm({
+      id: b.id, name: b.name, linkType,
+      category_id: b.category_id ?? '', account_id: b.account_id ?? '',
+      limit_amount: String(b.limit_amount),
+    })
+    setBudgetFormOpen(true)
+  }
+
+  function closeBudgetForm() {
+    setBudgetFormOpen(false)
+    setBudgetForm(emptyBudgetForm)
+  }
+
+  function onBudgetLinkTypeChange(linkType: BudgetLinkType) {
+    setBudgetForm({ ...budgetForm, linkType, category_id: '', account_id: '' })
+  }
+
+  function onBudgetCategoryChange(categoryId: string) {
+    const cat = categoryId ? categoriesById.get(categoryId) : undefined
+    setBudgetForm({
+      ...budgetForm,
+      category_id: categoryId,
+      name: budgetForm.name.trim() === '' && cat ? cat.name : budgetForm.name,
+    })
+  }
+
+  function onBudgetAccountChange(accountId: string) {
+    const acc = accountId ? accountsById.get(accountId) : undefined
+    setBudgetForm({
+      ...budgetForm,
+      account_id: accountId,
+      name: budgetForm.name.trim() === '' && acc ? acc.name : budgetForm.name,
+    })
+  }
+
+  async function saveBudget() {
+    const name = budgetForm.name.trim()
+    if (!name) { showToast('예산 이름을 입력해주세요', 'error'); return }
+    const limitNum = parseInt(budgetForm.limit_amount, 10)
+    if (isNaN(limitNum) || limitNum < 0) { showToast('한도는 0 이상의 정수여야 합니다', 'error'); return }
+
+    const category_id = budgetForm.linkType === 'category' ? (budgetForm.category_id || null) : null
+    const account_id = budgetForm.linkType === 'account' ? (budgetForm.account_id || null) : null
+
+    try {
+      if (budgetForm.id) {
+        await updateBudget(budgetForm.id, { name, category_id, account_id, limit_amount: toAmount(limitNum) })
+        showToast('예산이 수정되었습니다')
+      } else {
+        await createBudget({
+          id: ulid(), name, category_id, account_id,
+          month: budgetMonth, limit_amount: toAmount(limitNum), created_at_utc: new Date().toISOString(),
+        })
+        showToast('예산이 추가되었습니다')
+      }
+      queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      closeBudgetForm()
+    } catch (e) {
+      showToast(`저장 실패: ${(e as Error).message}`, 'error')
+    }
+  }
+
+  async function removeBudget(b: Budget) {
+    const ok = window.confirm(`'${b.name}' 예산을 삭제하시겠습니까?`)
+    if (!ok) return
+    await deleteBudget(b.id)
+    queryClient.invalidateQueries({ queryKey: ['budgets'] })
+    showToast('예산이 삭제되었습니다')
+  }
+
   return (
     <div className="page" style={{ paddingBottom: 100 }}>
       <div className="page-header" style={{ padding: '20px' }}>
@@ -303,12 +410,66 @@ export default function SettingsPage() {
         )}
       </Section>
 
+      <SectionTitle>예산 관리</SectionTitle>
+      <Section>
+        <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
+          <button onClick={() => setBudgetMonth(navigateMonth(budgetMonth, -1))} style={monthNavBtnStyle}>‹</button>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{formatMonthKorean(budgetMonth)}</span>
+          <button onClick={() => setBudgetMonth(navigateMonth(budgetMonth, 1))} style={monthNavBtnStyle}>›</button>
+        </div>
+
+        {budgets.length === 0 ? (
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>설정된 예산이 없습니다</div>
+        ) : (
+          budgets.map((b, idx) => {
+            const cat = b.category_id ? categoriesById.get(b.category_id) ?? null : null
+            const acc = b.account_id ? accountsById.get(b.account_id) ?? null : null
+            const linkLabel = cat ? cat.name : acc ? acc.name : '자유 항목'
+            return (
+              <div key={b.id} style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx === budgets.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  {cat && <CategoryIcon name={cat.name} size={14} color={cat.color} />}
+                  {acc && <span style={{ width: 10, height: 10, borderRadius: '50%', background: acc.color, flexShrink: 0 }} />}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{formatKRW(b.limit_amount)} · {linkLabel}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => openEditBudgetForm(b)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>편집</button>
+                  <button onClick={() => removeBudget(b)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: 'var(--expense)', cursor: 'pointer' }}>삭제</button>
+                </div>
+              </div>
+            )
+          })
+        )}
+
+        <button onClick={openAddBudgetForm} style={{ width: '100%', padding: '14px 20px', background: 'none', border: 'none', borderTop: budgets.length > 0 ? '1px solid var(--border)' : 'none', fontSize: 13, fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', textAlign: 'left' }}>
+          + 예산 추가
+        </button>
+      </Section>
+
       <SectionTitle>앱 정보</SectionTitle>
       <Section>
         <InfoRow label="버전" value={meta?.app_version ?? APP_VERSION} />
         <InfoRow label="스키마 버전" value={String(meta?.schema_version ?? SCHEMA_VERSION)} />
         <InfoRow label="마지막 백업" value={meta?.last_export_at_utc ? new Date(meta.last_export_at_utc).toLocaleString('ko-KR') : '없음'} isLast />
       </Section>
+
+      {budgetFormOpen && (
+        <BudgetForm
+          form={budgetForm}
+          setForm={setBudgetForm}
+          categories={activeCatsForBudget}
+          accounts={activeAccountsForBudget}
+          onLinkTypeChange={onBudgetLinkTypeChange}
+          onCategoryChange={onBudgetCategoryChange}
+          onAccountChange={onBudgetAccountChange}
+          onCancel={closeBudgetForm}
+          onSave={saveBudget}
+          isEdit={budgetForm.id !== null}
+        />
+      )}
     </div>
   )
 }
@@ -338,6 +499,83 @@ function InfoRow({ label, value, isLast = false }: { label: string; value: strin
     </div>
   )
 }
+
+const monthNavBtnStyle: React.CSSProperties = {
+  background: 'transparent', border: 'none', color: '#94A3B8',
+  fontSize: 18, cursor: 'pointer', padding: '2px 8px', lineHeight: 1,
+}
+
+interface BudgetFormProps {
+  form: BudgetFormState; setForm: (f: BudgetFormState) => void
+  categories: Category[]; accounts: Account[]
+  onLinkTypeChange: (linkType: BudgetLinkType) => void
+  onCategoryChange: (categoryId: string) => void
+  onAccountChange: (accountId: string) => void
+  onCancel: () => void; onSave: () => void; isEdit: boolean
+}
+
+const LINK_TYPE_OPTIONS: Array<{ value: BudgetLinkType; label: string }> = [
+  { value: 'none', label: '자유 항목' },
+  { value: 'category', label: '카테고리' },
+  { value: 'account', label: '계좌' },
+]
+
+function BudgetForm({ form, setForm, categories, accounts, onLinkTypeChange, onCategoryChange, onAccountChange, onCancel, onSave, isEdit }: BudgetFormProps) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onCancel}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 24, maxHeight: '85vh', overflowY: 'auto' }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginTop: 0, marginBottom: 20, color: 'var(--text)' }}>{isEdit ? '예산 편집' : '예산 추가'}</h2>
+        <label style={budgetLabelStyle}>연결 대상</label>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {LINK_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onLinkTypeChange(opt.value)}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, cursor: 'pointer',
+                border: form.linkType === opt.value ? '1px solid var(--primary)' : '1px solid var(--border)',
+                background: form.linkType === opt.value ? 'var(--primary)' : 'var(--bg)',
+                color: form.linkType === opt.value ? '#fff' : 'var(--text)', fontWeight: 600,
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {form.linkType === 'category' && (
+          <>
+            <label style={budgetLabelStyle}>카테고리 선택</label>
+            <select value={form.category_id} onChange={(e) => onCategoryChange(e.target.value)} style={budgetInputStyle}>
+              <option value="">카테고리 선택</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </>
+        )}
+        {form.linkType === 'account' && (
+          <>
+            <label style={budgetLabelStyle}>계좌 선택</label>
+            <select value={form.account_id} onChange={(e) => onAccountChange(e.target.value)} style={budgetInputStyle}>
+              <option value="">계좌 선택</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </>
+        )}
+        <label style={budgetLabelStyle}>예산 이름 *</label>
+        <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: 비상금" style={budgetInputStyle} />
+        <label style={budgetLabelStyle}>한도 (원)</label>
+        <input type="number" inputMode="numeric" step="1" min="0" value={form.limit_amount} onChange={(e) => setForm({ ...form, limit_amount: e.target.value })} style={budgetInputStyle} />
+        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, color: 'var(--text)', cursor: 'pointer' }}>취소</button>
+          <button onClick={onSave} style={{ flex: 1, padding: '12px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>저장</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const budgetLabelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 6, marginTop: 4 }
+const budgetInputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)', color: 'var(--text)', marginBottom: 14, boxSizing: 'border-box' }
 
 interface CategoryRowProps {
   cat: Category; isLast: boolean; isEditing: boolean

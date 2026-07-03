@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import type { Account, Transaction, Category } from '../../types'
+import type { Account, Transaction, Category, Budget } from '../../types'
 
 export async function runMigrations(): Promise<void> {
   // 현재 v1 스키마만 지원 — 향후 마이그레이션 여기에 추가
@@ -10,6 +10,7 @@ export async function importWithMigration(data: {
   accounts: unknown[]
   transactions: unknown[]
   categories: unknown[]
+  budgets?: unknown[]
 }): Promise<void> {
   if (data.schema_version > 1) {
     throw new Error('Unsupported schema version: ' + data.schema_version)
@@ -34,6 +35,7 @@ export async function importWithMigration(data: {
   const accounts = data.accounts as Account[]
   const transactions = data.transactions as Transaction[]
   const categories = data.categories as Category[]
+  const budgets = (data.budgets ?? []) as Budget[]
 
   if (accounts.length > 0) {
     const { error } = await supabase.from('accounts').insert(accounts)
@@ -45,6 +47,10 @@ export async function importWithMigration(data: {
   }
   if (transactions.length > 0) {
     const { error } = await supabase.from('transactions').insert(transactions)
+    if (error) throw error
+  }
+  if (budgets.length > 0) {
+    const { error } = await supabase.from('budgets').insert(budgets)
     if (error) throw error
   }
 
