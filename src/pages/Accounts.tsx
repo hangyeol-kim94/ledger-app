@@ -222,7 +222,7 @@ interface AccountFormProps {
 
 function AccountForm({ form, setForm, onCancel, onSave, isEdit }: AccountFormProps) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onCancel}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onCancel}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 24, maxHeight: '85vh', overflowY: 'auto' }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginTop: 0, marginBottom: 20, color: 'var(--text)' }}>{isEdit ? '계좌 편집' : '계좌 추가'}</h2>
         <label style={labelStyle}>계좌 이름 *</label>
