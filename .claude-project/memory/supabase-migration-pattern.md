@@ -1,8 +1,9 @@
 ---
 name: supabase-migration-pattern
-description: 기존 Supabase 데이터를 보존하면서 스키마를 변경하는 4단계 마이그레이션 패턴
+description: 기존 Supabase 데이터를 보존하면서 스키마를 변경하는 4단계 마이그레이션 패턴 — 실제 적용은 CLI가 아니라 SQL Editor 수동 붙여넣기
 type: project
 created: 2026-05-27
+updated: 2026-07-03
 ---
 
 migrate_v1_to_v2.sql 패턴:
@@ -11,7 +12,27 @@ migrate_v1_to_v2.sql 패턴:
 3. UPDATE 기존 거래 FK → 새 ID로 재매핑
 4. UPDATE 구형 행 SET archived=true (삭제 금지)
 
-CLI 명령: `supabase link --project-ref <ref>` 후 `supabase db query --linked --file <file.sql>`
+**실제 적용 방식은 CLI가 아니라 수동 SQL Editor 붙여넣기다.** 이 프로젝트에는 마이그레이션
+자동 배포 파이프라인이 없다 — `migrate_v1_to_v2.sql`, `migrate_add_budget_fields.sql`,
+`migrate_add_exclude_from_budget.sql`, `migrate_add_budget_date_range.sql` 등 지금까지
+작성된 모든 마이그레이션 파일 헤더에 예외 없이 "Supabase 대시보드 > SQL Editor에서
+실행하세요"라고 명시돼 있다. 아래의 `supabase db query --linked --file` CLI 명령은
+과거 메모에 남아있었지만 실제로 쓰인 적이 없는 것으로 보이는 방법이므로 참고만 하고,
+기본 안내는 "SQL Editor에 붙여넣어 실행"으로 한다.
+
+- Claude/에이전트가 할 수 있는 것은 마이그레이션 `.sql` 파일을 작성하는 것까지이며,
+  실제 프로덕션 DB 적용은 사용자가 Supabase 대시보드에서 직접 실행해야 한다. 마이그레이션
+  파일을 만든 뒤에는 사용자에게 "SQL Editor에 붙여넣어 실행해달라"고 안내하고, 사용자가
+  적용 완료를 알려주기 전까지는 반영됐다고 가정하면 안 된다.
+- (참고, 실사용 미확인) CLI 명령: `supabase link --project-ref <ref>` 후
+  `supabase db query --linked --file <file.sql>`
 
 **Why:** 마이그레이션 SQL이 idempotent해야 Supabase 대시보드에서 중복 실행해도 안전하다.
-**How to apply:** 다음 스키마 변경 시도 동일 4단계 패턴 사용. supabase/.temp/ 디렉토리는 .gitignore에 추가하거나 커밋 전 git restore --staged로 제외한다.
+실제 적용 경로가 수동 SQL Editor 붙여넣기이므로, "마이그레이션 파일을 만들었다"와 "프로덕션에
+적용됐다"는 서로 다른 상태이며 후자는 항상 사용자 확인이 필요하다는 점이 매 마이그레이션마다
+반복되는 프로젝트 구조적 특성이다.
+**How to apply:** 다음 스키마 변경 시에도 동일한 4단계 패턴의 SQL을 작성하고, 파일 헤더에
+"Supabase 대시보드 > SQL Editor에서 실행하세요" 안내를 넣는다. 마이그레이션 작성 후에는
+자동으로 적용됐다고 가정하지 말고 사용자에게 수동 실행을 요청하며, 적용 여부는 사용자의
+명시적 확인에 의존한다. supabase/.temp/ 디렉토리는 .gitignore에 추가하거나 커밋 전
+git restore --staged로 제외한다.
