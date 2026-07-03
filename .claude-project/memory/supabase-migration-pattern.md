@@ -6,6 +6,8 @@ created: 2026-05-27
 updated: 2026-07-03
 ---
 
+
+
 migrate_v1_to_v2.sql 패턴:
 1. ALTER TABLE ADD COLUMN IF NOT EXISTS (멱등 보장)
 2. INSERT 신규 행 ON CONFLICT DO NOTHING (재실행 안전)
@@ -54,3 +56,14 @@ DEFAULT 'expense' ② 거래 이력 기반 UPDATE ③ 이름 기반 fallback UPD
 **How to apply:** 부모-자식 마이그레이션 스크립트는 부모를 이름으로 조회해 JOIN하기 전에,
 그 부모가 없으면 먼저 생성하는 자기완결적(self-healing) INSERT를 앞에 둔다. "이전 마이그레이션이
 먼저 실행됐을 것"이라는 가정에만 의존하지 않는다.
+
+**2026-07-03: `supabase/import_data.sql`은 위 4단계 마이그레이션 패턴과 다른, 위험한 전체
+재시딩 스크립트다.** `DELETE FROM categories` 후 지출 카테고리만 `type` 컬럼을 아예 지정하지
+않고 재삽입해서, 컬럼 기본값에 의존한 결과 라이브 DB에 income 타입 카테고리 행이 0개가 되는
+버그가 있었다(거래 추가 모달·설정 카테고리 관리 화면 모두에서 수입 카테고리가 안 보이는 원인).
+이 버그는 앱 코드 리뷰로는 절대 못 잡는다 — 원인이 수동 실행 SQL 데이터 스크립트에만 있었기
+때문이다.
+**How to apply:** `import_data.sql`처럼 테이블을 통째로 지우고 재삽입하는 스크립트를 수정할
+때는 매 INSERT마다 `type` 컬럼 값을 명시적으로 지정한다(컬럼 기본값에 의존 금지). 이런 전체
+재시딩 스크립트를 다시 실행하기 전에는 항상 파일 내용 전체를 다시 확인해, 스키마에 새로 추가된
+컬럼(type 등)이 모든 INSERT 문에 반영돼 있는지 검증한다. [[check-existing-fix-before-writing]]

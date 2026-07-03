@@ -9,3 +9,4 @@
 - [categorymap-full-object](categorymap-full-object.md) — categoryMap을 Map<string,Category>로 저장해 name·color 단일 조회 접근
 - [budget-feature-architecture](budget-feature-architecture.md) — 예산 기간(start_date/end_date), getBudgetsByMonth 겹침 조회, computeBudgetSpent/computeBudgetPace 공용 유틸(Home/Analytics 중복 해소됨)
 - [modal-zindex-bottom-nav](modal-zindex-bottom-nav.md) — 하단 시트 모달 zIndex는 200 이상 필수 (bottom-nav와 충돌)
+- [check-existing-fix-before-writing](check-existing-fix-before-writing.md) — 스키마/데이터 버그 수정 파일 작성 전 supabase/*.sql과 HANDOFF.md를 먼저 확인해 중복 작성 방지 (feedback)

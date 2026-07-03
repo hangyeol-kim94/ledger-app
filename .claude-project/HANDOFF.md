@@ -1,57 +1,57 @@
 ---
-created: 2026-07-03T16:40:00+09:00
+created: 2026-07-03T16:45:00+09:00
 project: ledger-app
-summary: 카테고리에 수입/지출 type 필드 추가로 픽커 분리 + 수입 세부 카테고리 7종 추가
+summary: 라이브 DB에 수입 카테고리가 전혀 없는 문제 진단 + SQL 마이그레이션 정리, 실제 실행은 아직 안 됨
 ---
 
 ## Session Digest
 
-카테고리에 수입/지출을 구분하지 않아 예산·거래 필터가 뒤섞이던 문제를 해결하기 위해, `Category`에 `type`(income/expense) 필드를 추가하고 거래 추가 모달·거래내역 필터·설정의 카테고리 관리 화면에서 현재 타입에 맞는 카테고리만 노출하도록 필터링했다(예산 연결은 지출 타입만 노출). 아울러 '월급/수입' 하위에 금융수입/용돈/상여금/더치페이/앱테크/사업수입/기타 세부 카테고리와 아이콘을 추가했다. 기존 라이브 Supabase 데이터에는 스키마 변경이 자동 반영되지 않으므로, 사용자가 직접 두 마이그레이션 SQL을 Supabase SQL Editor에서 순서대로 실행해야 한다.
+이번 세션은 가계부 앱의 "설정 > 카테고리 관리" 및 "거래 추가" 화면에서 **수입(income) 카테고리가 전혀 보이지 않는 문제**를 진단하고 수정하는 작업이었다.
 
-## Progress
+근본 원인을 추적한 결과, `supabase/import_data.sql`이 `DELETE FROM categories` 후 지출(expense) 카테고리만 `type` 컬럼 지정 없이(DEFAULT 값에 의존) 재삽입하면서, 라이브 Supabase DB에 `type = 'income'`인 카테고리 행이 하나도 남지 않게 된 것이 원인이었다. 앱 코드(`c.type === 'income'`로 필터링하는 로직)는 정상이었고, 순수하게 **라이브 DB 데이터 문제**였다.
 
-**완료**
-- `Category` 타입에 `type: 'income' | 'expense'` 필드 추가 (`src/types/index.ts`)
-- `AddTransactionModal.tsx`: 거래 추가 시 선택된 타입에 맞는 카테고리만 노출
-- `Settings.tsx`: 카테고리 관리 화면에 지출/수입 탭 추가 + 예산 폼 카테고리 선택은 지출 타입만 노출
-- `Transactions.tsx`: 필터 칩(수입/지출) 선택 시 카테고리 드롭다운 동기화
-- `src/db/index.ts`, `src/utils/categoryIcons.tsx`: 신규 설치용 기본 시드에 '월급/수입' 최상위 카테고리 + 하위 7개(금융수입/용돈/상여금/더치페이/앱테크/사업수입/기타) 및 아이콘 매핑 추가
-- `supabase/schema.sql`: `categories.type` 컬럼 정의 추가 (신규 설치 스키마용)
-- 마이그레이션 SQL 2건 작성 및 방어 로직 보강: `supabase/migrate_add_category_type.sql`, `supabase/migrate_add_income_subcategories.sql`(부모 카테고리 부재 시 자동 생성하도록 수정 완료 — commit `ef6587c`)
-- lint / typecheck / build 전부 통과, 커밋 2건 push 완료 (`a831147`, `ef6587c`)
+수정 과정에서 새 SQL 스크립트(`add_income_categories.sql`)를 먼저 작성했으나, 마무리 전 재확인하는 과정에서 **이전 세션이 이미 동일한 목적의 마이그레이션 두 개**(`migrate_add_category_type.sql`, `migrate_add_income_subcategories.sql`)를 준비해두고 아직 실행하지 않은 상태였다는 사실을 발견했다. 이에 따라 새 스크립트를 이름 기반 idempotent 방식으로 재작성해 기존 마이그레이션과 순서/중복 걱정 없이 공존하도록 하고, 기존 마이그레이션 파일에도 누락되어 있던 '월급' 리프 카테고리를 추가했다. 또한 앱 코드 상에서 '월급' 카테고리가 아이콘을 지정받지 못해 '기타'와 동일한 fallback 아이콘(MoreHorizontal)을 공유하던 버그도 함께 수정했다.
 
-**미완료**
-- **라이브 Supabase DB에 마이그레이션 미적용** — 로컬 시드 변경은 신규 설치에만 적용되고, 기존 운영 데이터에는 SQL을 직접 실행해야 반영됨. 아직 실행 안 됨.
-- 마이그레이션 적용 후 실제 화면(거래 추가/설정/거래내역 필터)에서 수입 카테고리가 정상 노출되는지 라이브 DB 기준 검증 안 됨
+세션 중 발견된 프로세스 실수: `.claude-project/HANDOFF.md`나 기존 `supabase/*.sql` 목록을 먼저 확인하지 않고 새 SQL 픽스 파일부터 작성하여, 이전 세션이 이미 끝내놓은 작업을 중복 생산할 뻔했다. 라이브 DB에 실제로 중복 적용되기 전에 재확인을 통해 발견하고 바로잡았다.
 
-## Next Steps
+## Progress (완료/미완료)
 
-1. **[최우선] Supabase SQL 마이그레이션 실행 — 반드시 이 순서로:**
-   - ① `supabase/migrate_add_category_type.sql` 먼저 실행 (categories.type 컬럼 추가 + 거래 이력 기반 백필)
-   - ② `supabase/migrate_add_income_subcategories.sql` 그다음 실행 ('월급/수입' 부모가 없으면 자동 생성 후 자식 7개 삽입)
-   - Supabase 대시보드 > SQL Editor에서 직접 실행 (사용자가 수동으로 해야 함)
-2. 마이그레이션 실행 후 라이브 앱에서 거래 추가 모달 / 설정 카테고리 관리 / 거래내역 필터가 수입·지출 타입별로 올바르게 분리되는지 직접 확인
-3. 필요하면 Settings 카테고리 관리 화면에서 기존 카테고리의 type을 수동 재조정(현재 UI는 생성 시점에만 type을 지정하고, 생성 후 타입 변경 UI는 없음 — 백필 결과가 틀렸다면 Supabase에서 직접 UPDATE 필요)
+### 완료
+- 원인 진단: `import_data.sql`이 수입 카테고리를 전혀 남기지 않는다는 것 확인 (라이브 DB 데이터 문제, 앱 코드 버그 아님)
+- `src/db/index.ts`의 기본 시드 데이터에 '월급' 수입 리프 카테고리 추가
+- `src/utils/categoryIcons.tsx`에서 '월급' 카테고리를 Wallet 아이콘으로 명시 매핑 (기존에는 매핑이 없어 '기타'와 동일한 MoreHorizontal fallback을 공유하던 버그 수정)
+- `supabase/migrate_add_income_subcategories.sql`에 누락되어 있던 '월급' 리프 카테고리(`mig_inc08`) 추가
+- `supabase/add_income_categories.sql` 작성 — 이름 기준 존재 여부 체크로 완전히 idempotent하게 재작성, 실행 순서/중복과 무관하게 안전하도록 처리, 파일 상단에 "권장: 아래 정식 마이그레이션 2개를 먼저 실행하라"는 안내 주석 추가
+- 기존 마이그레이션 2개(`migrate_add_category_type.sql`, `migrate_add_income_subcategories.sql`) 내용을 직접 Read로 재확인 — 둘 다 `IF NOT EXISTS` / `WHERE NOT EXISTS` / `ON CONFLICT DO NOTHING` 패턴으로 이미 idempotent하며, '월급' 포함 8개 리프 카테고리가 모두 반영되어 있음. **추가 수정 불필요, 지금 상태로 실행 가능**
+- 4개 커밋 모두 `origin/master`에 push 완료 (`47df132`, `d445193`, `16423ee`, `3fdbede`)
+
+### 미완료 (가장 중요)
+- **세 SQL 스크립트 중 어느 것도 라이브 프로덕션 Supabase DB에 아직 실행되지 않음.** 즉, 지금 이 순간에도 실제 서비스의 수입 카테고리는 비어 있는 상태이며, 사용자가 Supabase SQL Editor에서 직접 실행해야만 문제가 해결된다.
+
+## Next Steps (우선순위 순)
+
+1. **(최우선)** Supabase 대시보드 > SQL Editor에서 `supabase/migrate_add_category_type.sql` 실행 — `categories.type` 컬럼 추가 + CHECK 제약 + 기존 거래 내역 기반 income 백필
+2. 이어서 `supabase/migrate_add_income_subcategories.sql` 실행 — '월급/수입' 상위 카테고리 + 하위 8개 카테고리(월급 포함) 생성
+3. 실행 후 앱에서 "거래 추가" 모달과 "설정 > 카테고리 관리" 화면의 수입(income) 탭에 카테고리가 정상적으로 표시되는지 직접 확인
+4. (선택) `import_data.sql`로 이미 들어와 있던 수입 거래(월급, 이자, 캐시백 등)는 `category_id`가 NULL일 가능성이 높음 — 필요하면 `add_income_categories.sql` 하단에 주석 처리된 UPDATE 문을 참고해 수동으로 분류 연결
+5. (선택, 낮은 우선순위) `add_income_categories.sql`은 이제 대안/폴백용으로만 남겨두거나, 정식 마이그레이션 2개로 목적이 흡수되었으므로 정리 여부 판단 — 기능상 문제는 없으므로 급하지 않음
 
 ## Blockers
 
-없음 — 이전에 발견됐던 "'월급/수입' 부모 카테고리가 라이브 DB에 없으면 두 마이그레이션이 에러 없이 조용히 아무 것도 하지 않는" 문제는 `migrate_add_income_subcategories.sql`에 self-healing INSERT를 추가해 해결함(commit `ef6587c`).
+- 이 세션에는 `.env`/Supabase 자격 증명이 없어 SQL을 직접 실행하거나 라이브 DB 상태를 조회/검증할 수 없었다. **사용자가 Supabase SQL Editor에서 수동으로 실행해야 함.**
+- 위 마이그레이션이 실행되기 전까지는 프로덕션 앱에서 수입 카테고리 관련 화면이 계속 비어 보이는 것이 정상이며, 이는 알려진 상태이지 새로운 버그가 아니다.
 
 ## Watch Out
 
-- 두 마이그레이션 SQL은 재실행해도 안전하게 설계됨(idempotent) — 컬럼 존재 체크, 이름 중복 체크, `ON CONFLICT DO NOTHING` 사용. 실수로 여러 번 돌려도 무방.
-- 예산(Budget) 폼의 카테고리 선택은 의도적으로 지출(expense) 타입만 노출하도록 필터링됨 — 수입 카테고리가 예산 폼에 안 보이는 건 버그 아니라 의도된 동작.
-- 마이그레이션 미실행 상태에서 라이브 DB에 이 세션의 프론트엔드 코드가 배포되면, `categories.type` 컬럼이 없어서 카테고리 관련 쿼리/필터링이 깨질 수 있음 — SQL 마이그레이션을 먼저 끝내고 배포/사용을 진행할 것.
-- 카테고리 생성 후 type을 바꾸는 UI는 없음(의도적으로 범위에서 제외) — 잘못 분류된 카테고리는 Supabase에서 직접 UPDATE하거나 삭제 후 재생성해야 함.
+- `migrate_add_category_type.sql`을 **먼저** 실행해야 한다. `categories.type` 컬럼이 없는 상태에서 `add_income_categories.sql`이나 `migrate_add_income_subcategories.sql`을 실행하면 INSERT 문이 실패한다.
+- 세 스크립트 모두 이름 기반(`WHERE NOT EXISTS ... name = ...`) 체크로 idempotent하게 작성되어 있어 어떤 순서/조합으로 실행해도 카테고리가 중복 생성되지 않지만, **정식 경로는 `migrate_add_category_type.sql` → `migrate_add_income_subcategories.sql` 순서**이며 `add_income_categories.sql`은 참고/폴백용이다. 굳이 셋 다 실행할 필요는 없다.
+- 향후 유사한 "카테고리/시드 데이터 복구" 요청을 받으면, 새 SQL 파일을 작성하기 전에 반드시 `.claude-project/HANDOFF.md`와 `supabase/*.sql` 기존 파일 목록을 먼저 확인할 것 — 이번 세션에서 이 절차를 건너뛰어 이미 존재하던 마이그레이션과 중복 작업을 할 뻔했다.
+- `import_data.sql`은 여전히 `categories.type`을 지정하지 않고 지출 카테고리만 재삽입하는 구조를 그대로 가지고 있다. 앞으로 이 스크립트를 다시 실행하면(예: DB를 초기화하는 상황) 동일한 문제가 재발할 수 있으므로, 필요하다면 이 스크립트 자체를 수입 카테고리 포함하도록 보강하는 것을 고려할 것 (이번 세션에서는 손대지 않음).
 
 ## Files Touched
 
-- `src/types/index.ts`
-- `src/components/AddTransactionModal.tsx`
-- `src/pages/Settings.tsx`
-- `src/pages/Transactions.tsx`
-- `src/db/index.ts`
-- `src/utils/categoryIcons.tsx`
-- `supabase/schema.sql`
-- `supabase/migrate_add_category_type.sql` (신규, 미실행)
-- `supabase/migrate_add_income_subcategories.sql` (신규, 미실행)
+- `src/db/index.ts` — 기본 시드 데이터에 '월급' 수입 리프 카테고리 추가
+- `src/utils/categoryIcons.tsx` — '월급' → Wallet 아이콘 명시 매핑 (기존 '기타'와 공유하던 fallback 아이콘 버그 수정)
+- `supabase/add_income_categories.sql` (신규) — 이름 기반 idempotent 복구 스크립트, 상단에 정식 마이그레이션 2개를 권장하는 안내 주석 포함
+- `supabase/migrate_add_income_subcategories.sql` (기존 파일 수정) — 누락되어 있던 '월급' 리프 카테고리(`mig_inc08`) 추가
+- (변경 없음, 재확인만 함) `supabase/migrate_add_category_type.sql` — 현재 상태로 실행 가능, 추가 수정 불필요
