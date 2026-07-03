@@ -248,10 +248,10 @@ export async function initializeDB(): Promise<void> {
   // Level 2 subcategories
   const level2Defs: Array<{ name: string; parent: string }> = [
     // 월급/수입
-    { name: '금융수입', parent: '월급/수입' }, { name: '용돈',   parent: '월급/수입' },
-    { name: '상여금',   parent: '월급/수입' }, { name: '더치페이', parent: '월급/수입' },
-    { name: '앱테크',   parent: '월급/수입' }, { name: '사업수입', parent: '월급/수입' },
-    { name: '기타',     parent: '월급/수입' },
+    { name: '월급',     parent: '월급/수입' }, { name: '금융수입', parent: '월급/수입' },
+    { name: '용돈',     parent: '월급/수입' }, { name: '상여금',   parent: '월급/수입' },
+    { name: '더치페이', parent: '월급/수입' }, { name: '앱테크',   parent: '월급/수입' },
+    { name: '사업수입', parent: '월급/수입' }, { name: '기타',     parent: '월급/수입' },
     // 식생활
     { name: '마트/식재료', parent: '식생활' }, { name: '외식',     parent: '식생활' },
     { name: '배달',        parent: '식생활' }, { name: '카페/음료', parent: '식생활' },

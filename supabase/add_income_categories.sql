@@ -13,7 +13,10 @@ INSERT INTO categories (id, name, color, type, archived, created_at_utc, parent_
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. 수입 하위 카테고리
+-- (이미 1~2번을 실행했다면 ON CONFLICT DO NOTHING 덕분에 다시 실행해도 안전합니다.
+--  inc_c08 '월급'만 최초 스크립트에서 누락되어 새로 추가되었습니다.)
 INSERT INTO categories (id, name, color, type, archived, created_at_utc, parent_id) VALUES
+  ('inc_c08', '월급',     '#10B981', 'income', false, NOW(), 'inc_p01'),
   ('inc_c01', '금융수입', '#10B981', 'income', false, NOW(), 'inc_p01'),
   ('inc_c02', '용돈',     '#10B981', 'income', false, NOW(), 'inc_p01'),
   ('inc_c03', '상여금',   '#10B981', 'income', false, NOW(), 'inc_p01'),
