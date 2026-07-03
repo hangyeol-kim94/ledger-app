@@ -7,5 +7,5 @@
 - [recharts-tooltip-type-fix](recharts-tooltip-type-fix.md) — Recharts Tooltip formatter 파라미터 타입 오류 수정 패턴
 - [analytics-page-architecture](analytics-page-architecture.md) — Analytics 분석 페이지 구조 및 데이터 흐름 패턴
 - [categorymap-full-object](categorymap-full-object.md) — categoryMap을 Map<string,Category>로 저장해 name·color 단일 조회 접근
-- [budget-feature-architecture](budget-feature-architecture.md) — 예산 category_id/account_id 상호배타 구조, 진행률 색상 임계치
+- [budget-feature-architecture](budget-feature-architecture.md) — 예산 상호배타 구조, exclude_from_budget, Home/Analytics 집계로직 중복 주의
 - [modal-zindex-bottom-nav](modal-zindex-bottom-nav.md) — 하단 시트 모달 zIndex는 200 이상 필수 (bottom-nav와 충돌)
