@@ -1,9 +1,14 @@
 -- ============================================================
 -- 수입 세부 카테고리 추가 — 금융수입/용돈/상여금/더치페이/앱테크/사업수입/기타
 -- Supabase 대시보드 > SQL Editor에서 실행하세요
--- '월급/수입' 최상위 카테고리가 이미 있어야 합니다 (migrate_add_category_type.sql 선행 실행 필요)
+-- migrate_add_category_type.sql 선행 실행 필요 (categories.type 컬럼)
 -- 여러 번 실행해도 안전합니다 (이름 중복 시 건너뜀).
 -- ============================================================
+
+-- '월급/수입' 최상위 카테고리가 없으면 먼저 생성 (이미 있으면 건너뜀)
+INSERT INTO categories (id, name, color, type, archived, created_at_utc, parent_id)
+SELECT 'mig_incparent01', '월급/수입', '#10B981', 'income', false, NOW(), NULL
+WHERE NOT EXISTS (SELECT 1 FROM categories WHERE name = '월급/수입' AND parent_id IS NULL);
 
 INSERT INTO categories (id, name, color, type, archived, created_at_utc, parent_id)
 SELECT gen_id, name, parent.color, 'income', false, NOW(), parent.id
