@@ -1,58 +1,66 @@
 ---
-created: 2026-07-03T15:20:00+09:00
+created: 2026-07-03T16:10:00+09:00
 project: ledger-app
-summary: 홈 화면에 예산(잔여/퍼센트) 섹션 추가 + 거래별 예산 제외 기능 구현
+summary: 예산에 시작일/종료일 직접 지정 기능 추가 + Home/Analytics 예산 집계 로직 공용화
 ---
 
 ## Session Digest
 
-- 홈 화면에 이번 달 예산 섹션 추가: 잔여 예산 및 항목별(카테고리/계좌) 진행률 바 표시
-- 거래 입력/수정 폼에 "이 항목은 예산에서 제외" 체크박스 추가
-- exclude_from_budget 플래그가 켜진 거래는 홈/분석 화면의 예산 지출 합계 계산에서 제외되도록 로직 수정
-- 홈 화면 예산 카드에 항목별 잔여 금액(남음/초과)과 소진율(%) 표시 추가
-- transactions 테이블에 exclude_from_budget 컬럼 추가 마이그레이션 스크립트 작성
+- 예산(Budget) 데이터 모델을 `month`(YYYY-MM) 단일 필드에서 `start_date`/`end_date`(YYYY-MM-DD) 임의 기간 지정 방식으로 교체 — 2주짜리 예산, 월 경계를 넘는 예산 등도 표현 가능해짐
+- 설정 화면 예산 폼에 시작일/종료일 date picker 추가(기본값은 선택 월의 1일~말일, 자유 조정 가능), 예산 목록에도 적용 기간 표시
+- `getBudgetsByMonth`를 정확한 월 일치가 아니라 기간이 겹치는 예산을 모두 반환하도록 로직 변경
+- `Home.tsx`/`Analytics.tsx`에 중복돼 있던 예산 지출 집계·데일리 페이스 계산 로직을 `src/utils/budget.ts`로 공용화(`computeBudgetSpent`, `computeBudgetPace`, `budgetProgressColor`); 데일리 페이스는 달력 월이 아닌 예산 자체 기간 기준으로 재계산
+- 기존 월별 예산 데이터를 백필하는 `supabase/migrate_add_budget_date_range.sql` 마이그레이션 추가(month 컬럼은 보존하되 NOT NULL 해제)
 
 ## Progress
 
 **완료된 것**
-- ✅ 홈 화면에 "이번 달 예산" 섹션 추가 — 전체 잔여 예산 합계 + 예산별 진행률 바/잔여금액/퍼센트 표시 (`src/pages/Home.tsx`)
-- ✅ 예산이 없을 때/로딩 중 상태 처리 (안내 문구 표시)
-- ✅ 거래 추가/수정 폼에 "이 항목은 예산에서 제외" 체크박스 추가 (지출 타입에서만 노출) (`src/components/AddTransactionModal.tsx`)
-- ✅ `Transaction` 타입에 `exclude_from_budget: boolean` 필드 추가 (`src/types/index.ts`)
-- ✅ Home.tsx / Analytics.tsx 지출 집계 로직에 `!t.exclude_from_budget` 조건 반영
-- ✅ `supabase/schema.sql`에 `exclude_from_budget` 컬럼 반영 (신규 설치 기준)
-- ✅ 마이그레이션 스크립트 작성 (`supabase/migrate_add_exclude_from_budget.sql`, `ADD COLUMN IF NOT EXISTS`로 재실행 안전)
-- ✅ lint / type-check / build 전부 통과 확인 후 커밋·푸시 완료
+- ✅ Budget의 `month`(YYYY-MM) 필드를 `start_date`/`end_date`(YYYY-MM-DD) 필드로 교체해 임의 기간(2주 예산, 월 경계를 넘는 예산 등) 지정 가능하도록 변경 (`src/types/index.ts`, `src/db/index.ts`)
+- ✅ 설정 화면 예산 폼에 시작일/종료일 date picker 추가 — 기본값은 선택된 월의 1일~말일이며 자유롭게 조정 가능 (`src/pages/Settings.tsx`)
+- ✅ 예산 목록에 적용 기간(시작일~종료일) 표시 추가
+- ✅ `getBudgetsByMonth`를 "정확한 월 일치"에서 "기간이 겹치는 예산 전체 반환" 방식으로 변경 (`src/db/index.ts`)
+- ✅ Home.tsx/Analytics.tsx에 중복돼 있던 예산 지출 집계·데일리 페이스 계산 로직을 `src/utils/budget.ts`로 공용화 (`computeBudgetSpent`, `computeBudgetPace`, `budgetProgressColor`) — 이전 세션 HANDOFF에서 지적된 "양쪽 파일 동시 수정 필요" 리스크를 해소
+- ✅ `supabase/migrate_add_budget_date_range.sql` 마이그레이션 작성 (기존 월별 예산을 해당 월 1일~말일로 백필, `month` 컬럼은 보존하되 NOT NULL만 해제)
+- ✅ `supabase/schema.sql` 신규 설치 기준 스키마 반영
+- ✅ lint / type-check / build 전부 통과 확인 후 커밋(`4ddc549`)·푸시 완료
 
 **안된 것**
-- ⬜ **마이그레이션 SQL이 실제 프로덕션 Supabase에 아직 미실행** (아래 Watch Out 참조)
-- ⬜ 마이그레이션 실행 후 실 데이터로 종단 검증(체크박스 저장 → 홈/Analytics 반영) 미완료
-- ⬜ 전 세션부터 이월: schema_version 갱신, Accounts 페이지 진입 경로 없음, Analytics 카테고리 드릴다운 등 (변동 없음)
+- ⬜ **마이그레이션 2개 모두 실제 프로덕션 Supabase DB에 미실행** — `migrate_add_exclude_from_budget.sql`(전 세션분)과 `migrate_add_budget_date_range.sql`(이번 세션분) 둘 다 대기 중
+- ⬜ 마이그레이션 실행 후 실 데이터로 종단 검증(예산 생성/수정, 기간 겹침 조회, 데일리 페이스 계산) 미완료
+- ⬜ 데일리 페이스 계산 기준이 "달력 월"에서 "예산 자체 기간"으로 바뀐 것에 대한 실사용 검증(경계값 케이스 포함) 미완료
+- ⬜ 전전 세션부터 이월: schema_version 갱신, Accounts 페이지 진입 경로 없음, Analytics 카테고리 드릴다운 등 (변동 없음)
 
 ## Next Steps
 
-1. **[최우선] Supabase SQL Editor에서 `supabase/migrate_add_exclude_from_budget.sql` 실행** — 실행 전까지는 체크박스를 켠 채 거래를 저장하면 프로덕션에서 컬럼 부재로 실패함
-2. 마이그레이션 실행 후, 실 데이터로 체크박스 on/off 거래를 만들어 홈 "이번 달 예산" 섹션과 Analytics 진행률에 정상 반영되는지 종단 확인
-3. (선택) 예산 섹션에 카테고리형/계좌형 예산이 섞여 있을 때 표시 우선순위·정렬 기준 점검
-4. (선택, 전 세션 이월) Accounts 페이지 nav 진입 경로 추가, schema_version 1→2 갱신
+1. **[최우선] Supabase SQL Editor에서 마이그레이션 2개를 순서대로 실행**
+   1) `supabase/migrate_add_exclude_from_budget.sql` (전 세션분, 아직 미실행)
+   2) `supabase/migrate_add_budget_date_range.sql` (이번 세션분)
+   → 실행 전까지는 예산 생성/수정 자체가 컬럼 부재로 실패함
+2. 마이그레이션 실행 후 실 데이터로 예산 생성/수정, 시작일~종료일 자유 조정, 기간이 겹치는 예산 여러 개 동시 표시 여부를 종단 확인
+3. 데일리 페이스 문구가 "예산 기간" 기준으로 정확히 계산되는지 확인 (특히 오늘 날짜가 기간 시작 전/종료 후인 경우, 기간이 1개월보다 짧거나 월 경계를 넘는 경우)
+4. (선택) 오래된 로컬 백업 JSON을 가진 경우 가져오기(import) 시 `month` 필드만 있고 `start_date`/`end_date`가 없는 데이터를 어떻게 처리할지 결정 (Watch Out 참조)
+5. (선택, 전전 세션 이월) Accounts 페이지 nav 진입 경로 추가, schema_version 갱신
 
 ## Blockers
 
-없음 — 코드 작업 자체는 막힘 없이 완료됨. 다만 마이그레이션 미실행 상태이므로 프로덕션에서 관련 기능을 실사용하기 전에 반드시 사용자가 SQL을 실행해야 함 (작업 진행을 막는 블로커는 아니지만 배포 전 필수 선행 조건).
+없음 — 코드 작업 자체는 막힘 없이 완료됨. 다만 마이그레이션 2건이 모두 미실행 상태이므로, 프로덕션에서 예산 관련 기능(생성/수정 포함)을 실사용하기 전에 반드시 사용자가 두 SQL을 순서대로 실행해야 함 (배포 전 필수 선행 조건).
 
 ## Watch Out
 
-- **Supabase 마이그레이션 미실행**: `supabase/migrate_add_exclude_from_budget.sql`이 아직 실제/프로덕션 Supabase DB에 적용되지 않았음. 이 상태에서 체크박스를 체크한 채 거래를 저장하면 `exclude_from_budget` 컬럼이 없어 insert/update가 실패한다. 다음 세션 시작 시 가장 먼저 실행 여부부터 확인할 것.
-- **Home.tsx / Analytics.tsx 예산 계산 로직 중복**: 지출 집계(`expenseByCategory`, `expenseByAccount`, budget별 `spent`/`ratio` 계산)가 두 파일에 거의 동일하게 복사되어 있음. 한쪽만 고치고 다른 쪽을 빠뜨리기 쉬우므로, 예산 관련 로직(색상 임계치 80%/100%, `exclude_from_budget` 필터, transfer 제외 등)을 수정할 때는 반드시 **양쪽 파일을 함께** 확인/수정할 것. 공통 유틸로 뽑아내는 리팩터링을 고려해볼 만함.
-- 예산 지출 집계는 기존과 동일하게 `type === 'expense'`만 카운트 — `exclude_from_budget`은 그 위에 추가된 필터일 뿐, transfer/income은 여전히 미포함.
-- `exclude_from_budget`은 지출(expense) 타입에서만 UI/로직상 의미가 있음 — 수입/이체 저장 시에는 항상 `false`로 강제 저장됨(`AddTransactionModal.tsx`).
-- 신규 컬럼은 `NOT NULL DEFAULT FALSE`라 기존 행에는 영향 없음 — 하지만 마이그레이션 실행 전에는 컬럼 자체가 없으므로 위 블로킹 이슈가 발생.
+- **[최우선] Supabase 마이그레이션이 2개나 밀려 있음**: `migrate_add_exclude_from_budget.sql`(전 세션분)과 `migrate_add_budget_date_range.sql`(이번 세션분) 모두 실제 프로덕션 DB에 미적용 상태. 이번 세션 변경으로 문제가 더 심각해졌다 — 이 상태에서는 거래의 "예산 제외" 체크박스뿐 아니라 **예산 생성/수정 자체**가 `start_date`/`end_date` 컬럼 부재로 실패한다. 다음 세션 시작 시 가장 먼저 두 마이그레이션의 실행 여부를 확인할 것.
+- **오래된 JSON 백업 가져오기(import) 호환성 문제**: `month` 필드 기반이던 구버전 백업 JSON을 가져오면 `start_date`/`end_date`가 없어 예산 데이터가 깨지거나 가져오기 자체가 실패할 수 있다. import 로직에 `month`→기간 변환용 백필 처리가 없다면 추가 검토가 필요함.
+- **데일리 페이스 계산 기준 변경**: 예산 자체 기간 기준으로 바뀌었으므로, 기간이 매우 짧거나(예: 1주) 월 경계를 넘는 예산에서 페이스 문구가 직관과 다르게 나올 수 있음 — 실 데이터로 경계값 확인 필요.
+- `getBudgetsByMonth`가 이제 "정확한 월 일치"가 아니라 "기간이 겹치는 예산 전체"를 반환하므로, 한 달에 예산이 여러 개 겹쳐 보일 수 있음 — 홈/Analytics 화면에서 중복/우선순위 표시가 의도대로 동작하는지 확인할 것.
+- `month` 컬럼은 삭제하지 않고 보존(NOT NULL만 해제)했으므로 기존 코드에서 `month`를 참조하는 부분이 남아있지 않은지(특히 export/백업 관련 코드) 재확인 권장.
 
 ## Files Touched
 
-- `src/pages/Home.tsx` — "이번 달 예산" 섹션 추가, 예산별 지출 집계 로직
-- `src/pages/Analytics.tsx` — 지출 집계에 `exclude_from_budget` 필터 반영
-- `src/components/AddTransactionModal.tsx` — "예산에서 제외" 체크박스 UI 및 저장 로직
-- `src/types/index.ts` — `Transaction.exclude_from_budget` 필드 추가
-- `supabase/schema.sql` — `exclude_from_budget` 컬럼 반영
-- `supabase/migrate_add_exclude_from_budget.sql` — 신규 마이그레이션 (미실행 상태)
+- `src/types/index.ts` — Budget의 `month` → `start_date`/`end_date` 필드 교체
+- `src/db/index.ts` — `getBudgetsByMonth`를 기간 겹침 조회로 변경
+- `src/pages/Settings.tsx` — 예산 폼에 시작일/종료일 date picker 추가, 목록에 적용 기간 표시
+- `src/pages/Home.tsx` — 중복 예산 집계/페이스 로직 제거, `src/utils/budget.ts` 유틸 사용으로 교체
+- `src/pages/Analytics.tsx` — 동일하게 `src/utils/budget.ts` 유틸 사용으로 교체
+- `src/utils/budget.ts` — 신규 공용 유틸 (`computeBudgetSpent`, `computeBudgetPace`, `budgetProgressColor`)
+- `src/utils/format.ts` — `daysInMonth` 헬퍼 추가
+- `supabase/schema.sql` — 신규 설치 기준 스키마 반영
+- `supabase/migrate_add_budget_date_range.sql` — 신규 마이그레이션 (미실행 상태)
