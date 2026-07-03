@@ -14,6 +14,7 @@ INSERT INTO categories (id, name, color, type, archived, created_at_utc, parent_
 SELECT gen_id, name, parent.color, 'income', false, NOW(), parent.id
 FROM (
   VALUES
+    ('mig_inc08', '월급'),
     ('mig_inc01', '금융수입'),
     ('mig_inc02', '용돈'),
     ('mig_inc03', '상여금'),
