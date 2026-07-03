@@ -10,7 +10,7 @@ import {
 } from '../db'
 import { importWithMigration } from '../db/migrations'
 import { ulid } from '../utils/ulid'
-import { formatKRW, currentMonth, formatMonthKorean, navigateMonth } from '../utils/format'
+import { formatKRW, currentMonth, formatMonthKorean, navigateMonth, daysInMonth } from '../utils/format'
 import { useAppStore } from '../stores/useAppStore'
 import { CategoryIcon } from '../utils/categoryIcons'
 
@@ -27,9 +27,27 @@ interface BudgetFormState {
   category_id: string
   account_id: string
   limit_amount: string
+  start_date: string
+  end_date: string
 }
 
-const emptyBudgetForm: BudgetFormState = { id: null, name: '', linkType: 'none', category_id: '', account_id: '', limit_amount: '' }
+// 예산 폼 기본값: 선택된 월의 1일~말일을 시작일/종료일로 미리 채워주고, 필요하면 사용자가 직접 조정
+function makeEmptyBudgetForm(month: string): BudgetFormState {
+  return {
+    id: null, name: '', linkType: 'none', category_id: '', account_id: '', limit_amount: '',
+    start_date: `${month}-01`,
+    end_date: `${month}-${String(daysInMonth(month)).padStart(2, '0')}`,
+  }
+}
+
+// 'YYYY-MM-DD' ~ 'YYYY-MM-DD' → '7월 1일 ~ 7월 31일'
+function formatDateRangeKorean(start: string, end: string): string {
+  const fmt = (d: string) => {
+    const [, m, day] = d.split('-')
+    return `${parseInt(m, 10)}월 ${parseInt(day, 10)}일`
+  }
+  return `${fmt(start)} ~ ${fmt(end)}`
+}
 
 export default function SettingsPage() {
   const showToast = useAppStore((s) => s.showToast)
@@ -53,7 +71,7 @@ export default function SettingsPage() {
     queryKey: ['budgets', budgetMonth],
     queryFn: () => getBudgetsByMonth(budgetMonth),
   })
-  const [budgetForm, setBudgetForm] = useState<BudgetFormState>(emptyBudgetForm)
+  const [budgetForm, setBudgetForm] = useState<BudgetFormState>(() => makeEmptyBudgetForm(currentMonth()))
   const [budgetFormOpen, setBudgetFormOpen] = useState(false)
   const activeCatsForBudget = useMemo(() => categories.filter((c) => !c.archived), [categories])
   const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
@@ -220,7 +238,7 @@ export default function SettingsPage() {
   }
 
   function openAddBudgetForm() {
-    setBudgetForm(emptyBudgetForm)
+    setBudgetForm(makeEmptyBudgetForm(budgetMonth))
     setBudgetFormOpen(true)
   }
 
@@ -230,13 +248,14 @@ export default function SettingsPage() {
       id: b.id, name: b.name, linkType,
       category_id: b.category_id ?? '', account_id: b.account_id ?? '',
       limit_amount: String(b.limit_amount),
+      start_date: b.start_date, end_date: b.end_date,
     })
     setBudgetFormOpen(true)
   }
 
   function closeBudgetForm() {
     setBudgetFormOpen(false)
-    setBudgetForm(emptyBudgetForm)
+    setBudgetForm(makeEmptyBudgetForm(budgetMonth))
   }
 
   function onBudgetLinkTypeChange(linkType: BudgetLinkType) {
@@ -266,18 +285,24 @@ export default function SettingsPage() {
     if (!name) { showToast('예산 이름을 입력해주세요', 'error'); return }
     const limitNum = parseInt(budgetForm.limit_amount, 10)
     if (isNaN(limitNum) || limitNum < 0) { showToast('한도는 0 이상의 정수여야 합니다', 'error'); return }
+    if (!budgetForm.start_date || !budgetForm.end_date) { showToast('시작일과 종료일을 입력해주세요', 'error'); return }
+    if (budgetForm.start_date > budgetForm.end_date) { showToast('종료일은 시작일보다 빠를 수 없습니다', 'error'); return }
 
     const category_id = budgetForm.linkType === 'category' ? (budgetForm.category_id || null) : null
     const account_id = budgetForm.linkType === 'account' ? (budgetForm.account_id || null) : null
 
     try {
       if (budgetForm.id) {
-        await updateBudget(budgetForm.id, { name, category_id, account_id, limit_amount: toAmount(limitNum) })
+        await updateBudget(budgetForm.id, {
+          name, category_id, account_id, limit_amount: toAmount(limitNum),
+          start_date: budgetForm.start_date, end_date: budgetForm.end_date,
+        })
         showToast('예산이 수정되었습니다')
       } else {
         await createBudget({
           id: ulid(), name, category_id, account_id,
-          month: budgetMonth, limit_amount: toAmount(limitNum), created_at_utc: new Date().toISOString(),
+          start_date: budgetForm.start_date, end_date: budgetForm.end_date,
+          limit_amount: toAmount(limitNum), created_at_utc: new Date().toISOString(),
         })
         showToast('예산이 추가되었습니다')
       }
@@ -433,6 +458,7 @@ export default function SettingsPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{formatKRW(b.limit_amount)} · {linkLabel}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{formatDateRangeKorean(b.start_date, b.end_date)}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -565,6 +591,16 @@ function BudgetForm({ form, setForm, categories, accounts, onLinkTypeChange, onC
         <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="예: 비상금" style={budgetInputStyle} />
         <label style={budgetLabelStyle}>한도 (원)</label>
         <input type="number" inputMode="numeric" step="1" min="0" value={form.limit_amount} onChange={(e) => setForm({ ...form, limit_amount: e.target.value })} style={budgetInputStyle} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={budgetLabelStyle}>시작일</label>
+            <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} style={budgetInputStyle} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={budgetLabelStyle}>종료일</label>
+            <input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} style={budgetInputStyle} />
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
           <button onClick={onCancel} style={{ flex: 1, padding: '12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 14, color: 'var(--text)', cursor: 'pointer' }}>취소</button>
           <button onClick={onSave} style={{ flex: 1, padding: '12px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>저장</button>

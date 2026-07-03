@@ -49,3 +49,9 @@ export function navigateMonth(month: string, direction: number): string {
   const d = new Date(year, m - 1 + direction, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
+
+// Number of days in a given 'YYYY-MM' month
+export function daysInMonth(month: string): number {
+  const [year, m] = month.split('-').map(Number)
+  return new Date(year, m, 0).getDate()
+}

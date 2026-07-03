@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getAccounts, getCategories, getTransactionsByMonth, computeAllBalances, getBudgetsByMonth } from '../db'
+import { getAccounts, getCategories, getTransactionsByMonth, getActiveTransactions, computeAllBalances, getBudgetsByMonth } from '../db'
 import type { Account, Category, Transaction } from '../types'
 import { formatKRW, formatMonthKorean, navigateMonth, today } from '../utils/format'
+import { computeBudgetSpent, computeBudgetPace, budgetProgressColor } from '../utils/budget'
 import { useAppStore } from '../stores/useAppStore'
 import DonutChart, { type DonutSlice } from '../components/DonutChart'
 import { CategoryIcon, TrendingUp, TrendingDown, ArrowLeftRight } from '../utils/categoryIcons'
@@ -49,6 +50,10 @@ export default function HomePage() {
   const { data: budgets } = useQuery({
     queryKey: ['budgets', selectedMonth],
     queryFn: () => getBudgetsByMonth(selectedMonth),
+  })
+  const { data: allTransactions } = useQuery({
+    queryKey: ['transactions-all'],
+    queryFn: getActiveTransactions,
   })
 
   const accounts = useMemo(
@@ -105,43 +110,16 @@ export default function HomePage() {
     }))
   }, [transactions, categories, totals.expense])
 
-  const expenseByCategory = useMemo(() => {
-    const map = new Map<string, number>()
-    if (!transactions) return map
-    for (const t of transactions) {
-      if (t.type === 'expense' && t.category_id && !t.exclude_from_budget) {
-        map.set(t.category_id, (map.get(t.category_id) ?? 0) + t.amount)
-      }
-    }
-    return map
-  }, [transactions])
-
-  const expenseByAccount = useMemo(() => {
-    const map = new Map<string, number>()
-    if (!transactions) return map
-    for (const t of transactions) {
-      if (t.type === 'expense' && !t.exclude_from_budget) {
-        map.set(t.account_id, (map.get(t.account_id) ?? 0) + t.amount)
-      }
-    }
-    return map
-  }, [transactions])
-
   const budgetSummary = useMemo(() => {
-    if (!budgets || budgets.length === 0) return null
+    if (!budgets || budgets.length === 0 || !allTransactions) return null
     let totalLimit = 0
     let totalSpent = 0
     for (const b of budgets) {
-      const spent = b.category_id
-        ? expenseByCategory.get(b.category_id) ?? 0
-        : b.account_id
-        ? expenseByAccount.get(b.account_id) ?? 0
-        : 0
       totalLimit += b.limit_amount
-      totalSpent += spent
+      totalSpent += computeBudgetSpent(b, allTransactions) ?? 0
     }
     return { totalLimit, totalSpent, totalRemaining: totalLimit - totalSpent }
-  }, [budgets, expenseByCategory, expenseByAccount])
+  }, [budgets, allTransactions])
 
   const recentTransactions = useMemo<Transaction[]>(() => {
     if (!transactions) return []
@@ -225,7 +203,7 @@ export default function HomePage() {
           <button onClick={() => setCurrentPage('settings')} style={linkBtnStyle}>관리</button>
         </div>
         <div style={{ background: '#fff', borderRadius: 16, padding: 18, boxShadow: 'var(--shadow)' }}>
-          {loading ? (
+          {loading || !budgets || !allTransactions ? (
             <div style={{ padding: '8px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>불러오는 중…</div>
           ) : !budgetSummary ? (
             <div style={{ padding: '8px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>설정된 예산이 없습니다</div>
@@ -238,15 +216,11 @@ export default function HomePage() {
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {budgets!.map((b) => {
-                  const spent = b.category_id
-                    ? expenseByCategory.get(b.category_id) ?? 0
-                    : b.account_id
-                    ? expenseByAccount.get(b.account_id) ?? 0
-                    : 0
+                {budgets.map((b) => {
+                  const spent = computeBudgetSpent(b, allTransactions) ?? 0
                   const ratio = b.limit_amount > 0 ? spent / b.limit_amount : 0
-                  const remaining = b.limit_amount - spent
-                  const barColor = ratio >= 1 ? '#EF4444' : ratio >= 0.8 ? '#D97706' : '#059669'
+                  const barColor = budgetProgressColor(ratio)
+                  const paceDiff = computeBudgetPace(b, spent, today())
                   return (
                     <div key={b.id}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -257,8 +231,8 @@ export default function HomePage() {
                         <div style={{ height: '100%', width: `${Math.min(ratio, 1) * 100}%`, background: barColor, borderRadius: 3, transition: 'width 0.3s' }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                        <span style={{ fontSize: 11, color: remaining < 0 ? '#EF4444' : 'var(--muted)' }}>
-                          {remaining < 0 ? `${formatKRW(-remaining)} 초과` : `${formatKRW(remaining)} 남음`}
+                        <span style={{ fontSize: 11, color: paceDiff < 0 ? '#EF4444' : 'var(--muted)' }}>
+                          {paceDiff < 0 ? `${formatKRW(-paceDiff)} 초과했어요` : `${formatKRW(paceDiff)} 더 사용할 수 있어요`}
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 600, color: barColor }}>{Math.round(ratio * 100)}%</span>
                       </div>

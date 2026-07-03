@@ -47,7 +47,8 @@ CREATE TABLE budgets (
   name TEXT NOT NULL,
   category_id TEXT REFERENCES categories(id),
   account_id TEXT REFERENCES accounts(id),
-  month TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
   limit_amount INTEGER NOT NULL,
   created_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -83,4 +84,4 @@ CREATE INDEX idx_transactions_date        ON transactions(date);
 CREATE INDEX idx_transactions_account_id  ON transactions(account_id);
 CREATE INDEX idx_transactions_deleted_at  ON transactions(deleted_at_utc);
 CREATE INDEX idx_transactions_category_id ON transactions(category_id);
-CREATE INDEX idx_budgets_month            ON budgets(month);
+CREATE INDEX idx_budgets_date_range       ON budgets(start_date, end_date);

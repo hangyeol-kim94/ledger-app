@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import type { Account, Transaction, Category, AppMeta, Budget } from '../types'
+import { daysInMonth } from '../utils/format'
 
 // ─── Accounts ───
 
@@ -161,18 +162,22 @@ export async function getBudgets(): Promise<Budget[]> {
   const { data, error } = await supabase
     .from('budgets')
     .select('*')
-    .order('month', { ascending: false })
+    .order('start_date', { ascending: false })
     .order('created_at_utc')
   if (error) throw error
   return (data ?? []) as Budget[]
 }
 
+// 예산 기간(start_date~end_date)이 주어진 달과 겹치는 예산 전체 조회
 export async function getBudgetsByMonth(month: string): Promise<Budget[]> {
+  const monthStart = `${month}-01`
+  const monthEnd = `${month}-${String(daysInMonth(month)).padStart(2, '0')}`
   const { data, error } = await supabase
     .from('budgets')
     .select('*')
-    .eq('month', month)
-    .order('created_at_utc')
+    .lte('start_date', monthEnd)
+    .gte('end_date', monthStart)
+    .order('start_date')
   if (error) throw error
   return (data ?? []) as Budget[]
 }

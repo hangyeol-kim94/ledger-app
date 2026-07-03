@@ -52,7 +52,8 @@ export interface Budget {
   name: string             // display name — auto-filled from category/account name, editable for freeform items
   category_id: CategoryId | null  // linked category for automatic spend tracking (mutually exclusive with account_id)
   account_id: AccountId | null    // linked account for automatic spend tracking (mutually exclusive with category_id)
-  month: string           // 'YYYY-MM'
+  start_date: string      // 'YYYY-MM-DD' inclusive — custom budget period start
+  end_date: string        // 'YYYY-MM-DD' inclusive — custom budget period end
   limit_amount: Amount
   created_at_utc: string  // ISO 8601 UTC
 }

@@ -6,6 +6,7 @@ import {
 import { getActiveTransactions, getCategories, getAccounts, getBudgetsByMonth } from '../db'
 import type { Category, Account } from '../types'
 import { formatKRW, formatMonthKorean, navigateMonth, currentMonth } from '../utils/format'
+import { computeBudgetSpent, budgetProgressColor } from '../utils/budget'
 import DonutChart, { type DonutSlice } from '../components/DonutChart'
 
 function compactKRW(n: number): string {
@@ -102,30 +103,6 @@ export default function AnalyticsPage() {
       percentage: (e.amount / total) * 100,
     }))
   }, [allTransactions, selectedMonth, selectedTotals.expense, catById])
-
-  // ── 카테고리별 지출 (예산 진행률용) ──
-  const expenseByCategory = useMemo(() => {
-    const map = new Map<string, number>()
-    if (!allTransactions) return map
-    for (const t of allTransactions) {
-      if (t.date.startsWith(selectedMonth) && t.type === 'expense' && t.category_id && !t.exclude_from_budget) {
-        map.set(t.category_id, (map.get(t.category_id) ?? 0) + t.amount)
-      }
-    }
-    return map
-  }, [allTransactions, selectedMonth])
-
-  // ── 계좌별 지출 (예산 진행률용) ──
-  const expenseByAccount = useMemo(() => {
-    const map = new Map<string, number>()
-    if (!allTransactions) return map
-    for (const t of allTransactions) {
-      if (t.date.startsWith(selectedMonth) && t.type === 'expense' && !t.exclude_from_budget) {
-        map.set(t.account_id, (map.get(t.account_id) ?? 0) + t.amount)
-      }
-    }
-    return map
-  }, [allTransactions, selectedMonth])
 
   // ── 요일별 지출 ──
   const dowData = useMemo(() => {
@@ -300,13 +277,9 @@ export default function AnalyticsPage() {
               {budgets.map((b) => {
                 const cat = b.category_id ? catById.get(b.category_id) ?? null : null
                 const acc = b.account_id ? accountById.get(b.account_id) ?? null : null
-                const spent = b.category_id
-                  ? expenseByCategory.get(b.category_id) ?? 0
-                  : b.account_id
-                  ? expenseByAccount.get(b.account_id) ?? 0
-                  : null
+                const spent = computeBudgetSpent(b, allTransactions ?? [])
                 const ratio = spent !== null && b.limit_amount > 0 ? spent / b.limit_amount : 0
-                const barColor = ratio >= 1 ? '#EF4444' : ratio >= 0.8 ? '#D97706' : '#059669'
+                const barColor = budgetProgressColor(ratio)
                 return (
                   <div key={b.id}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
